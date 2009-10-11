@@ -18,23 +18,32 @@
 #include <unistd.h> 
 #include <time.h>
 
-unsigned int start_tick;
+unsigned int start_tick_im;
+unsigned int start_tick_chat;
 
 int find_char(char* str, char c);
 int find_char_reverse(char* str, char c);
 void strip_msn_font_tags(char* str);
+int s_strlen(char* str);
 
 
 char* server = "127.0.0.1:23053";
 char* appname = PLUGIN_NAME;
+#define ICON_PATH "http://developer.pidgin.im/attachment/wiki/SpreadPidginAvatars/pidgin.2.png?format=raw"
 
-char* notifications[6] = {
+char* notifications[] = {
 	"buddy-sign-in",
 	"buddy-sign-out",
 	"im-msg-recived",
 	"connection-error",
-	"buddy-change-image"
+	"buddy-change-image",
+	"chat-msg-recived",
+	"chat-buddy-sign-in",
+	"chat-buddy-sign-out",
+	"chat-invited",
+	"chat-topic-change"
 };
+
 
 /**************************************************************************
  * send growl message (from mattn's gntp-send commandline program)
@@ -102,28 +111,24 @@ gntp_register(char* name, char* password)
 		return;
 	}
 
-	char icon_path[512];
-	getcwd(icon_path, 512);
-	strcat(icon_path, "/plugins/pidgin.png");
-
-
 	sendline(sock, "GNTP/1.0 REGISTER NONE", authheader);
 	sendline(sock, "Application-Name: ", appname);
-	sendline(sock, "Notifications-Count: 5", NULL);
+	sendline(sock, "Application-Icon: ", ICON_PATH);
+	
+	sendline(sock, "Notifications-Count: 10", NULL);
 
 	int it = 0;
-	for(;it < 5; it++ )
+	for(;it < 10; it++ )
 	{
 		sendline(sock, "", NULL);
 		sendline(sock, "Notification-Name: ", notifications[it]);
 		sendline(sock, "Notification-Display-Name: ", notifications[it]);
 		sendline(sock, "Notification-Enabled: True", NULL);
-		sendline(sock, "Notification-Icon: file://", icon_path);
+		sendline(sock, "Notification-Icon: file://", ICON_PATH);
 		
 		sendline(sock, "\n\r", NULL);
 	}
 	sendline(sock, "", NULL);
-
 	gntp_parse_response(sock);
 
 	sock = 0;
@@ -137,9 +142,6 @@ gntp_notify(char* notify, char* icon, char* title, char* message, char* password
 	char* salthash;
 	char* keyhash;
 	char* authheader = NULL;
-
-	//hack to hide spam when signing on to account
-	if( GetTickCount() - start_tick < 10000) return;
 
 #ifdef _WIN32
 	WSADATA wsaData;
@@ -176,6 +178,7 @@ gntp_notify(char* notify, char* icon, char* title, char* message, char* password
 	sendline(sock, "Notification-Title: ", title);
 	sendline(sock, "Notification-Text: ", message);
 	if (icon) sendline(sock, "Notification-Icon: ", icon);
+	else sendline(sock, "Notification-Icon: ", ICON_PATH);
 	sendline(sock, "", NULL);
 
 	gntp_parse_response(sock);
@@ -189,17 +192,16 @@ gntp_notify(char* notify, char* icon, char* title, char* message, char* password
  **************************************************************************/
 static void
 buddy_icon_changed_cb(PurpleBuddy *buddy)
-{
+{	
+	//hack to hide spam when signing on to account
+	if( GetTickCount() - start_tick_im < 10000) return;
+	
 	char* buddy_nick = purple_buddy_get_alias(buddy);
 	char* buddy_name = purple_buddy_get_name(buddy);
 	PurpleBuddyIcon* icon = purple_buddy_get_icon(buddy);
 	char* icon_path = purple_buddy_icon_get_full_path(icon);
 	
-	int len = 0;
-	if(buddy_nick != NULL)
-		len = strlen(buddy_nick);
-	if(buddy_name  != NULL )
-		len += strlen(buddy_name);
+	int len = s_strlen(buddy_nick) + s_strlen(buddy_name);
 		
 	char *growl_msg = malloc( len + 20 );
 	sprintf(growl_msg,"%s changed image\n(%s)", buddy_nick, buddy_name );
@@ -214,6 +216,9 @@ buddy_icon_changed_cb(PurpleBuddy *buddy)
 static void
 buddy_signed_on_cb(PurpleBuddy *buddy, void *data)
 {
+	//hack to hide spam when signing on to account
+	if( GetTickCount() - start_tick_im < 10000) return;
+	
 	char* buddy_nick = purple_buddy_get_alias(buddy);
 	char* buddy_name = purple_buddy_get_name(buddy);
 	PurpleBuddyIcon* icon = purple_buddy_get_icon(buddy);
@@ -242,11 +247,7 @@ buddy_signed_off_cb(PurpleBuddy *buddy, void *data)
 	PurpleBuddyIcon* icon = purple_buddy_get_icon(buddy);
 	char* icon_path = purple_buddy_icon_get_full_path(icon);
 		
-	int len = 0;
-	if(buddy_nick != NULL)
-		len = strlen(buddy_nick);
-	if(buddy_name  != NULL )
-		 len += strlen(buddy_name);
+	int len = s_strlen(buddy_nick) + s_strlen(buddy_name);
 	
 	char *growl_msg = malloc( len + 20 );
 	
@@ -262,12 +263,13 @@ buddy_signed_off_cb(PurpleBuddy *buddy, void *data)
 static void
 signed_on_cb(PurpleConnection *gc, void *data)
 {
-	start_tick = GetTickCount();
+	start_tick_im = GetTickCount();
 }
 
 static void
 signed_off_cb(PurpleConnection *gc, void *data)
 {
+	
 }
 
 static void
@@ -277,7 +279,9 @@ connection_error_cb(PurpleConnection *gc, PurpleConnectionError err,
 	PurpleAccount* account = purple_connection_get_account(gc);
 	const gchar *username =	purple_account_get_username(account);
 
-	int len = strlen(desc) + strlen(username);
+
+	int len = s_strlen(desc) + s_strlen(username);
+	
 	char *growl_msg = malloc( len + 25 );
 	sprintf(growl_msg, "%s\ncode: %u\n%s", desc, err, username);
 	
@@ -294,6 +298,7 @@ static void
 wrote_im_msg_cb(PurpleAccount *account, const char *who, const char *buffer,
 				PurpleConversation *conv, PurpleMessageFlags flags, void *data)
 {
+	
 }
 
 static void
@@ -318,11 +323,8 @@ received_im_msg_cb(PurpleAccount *account, char *sender, char *buffer,
 	buddy = purple_find_buddy(account, sender);
 	buddy_nick = purple_buddy_get_alias( buddy );
 
-	int len = 0;
-	if(buddy_nick != NULL)
-		len = strlen(buddy_nick);
-	if(message != NULL)
-		len += strlen(message); 
+
+	int len = s_strlen(buddy_nick) + s_strlen(message);
 
 	// message
 	notification = malloc( len + 10 );
@@ -353,6 +355,17 @@ static void
 received_chat_msg_cb(PurpleAccount *account, char *sender, char *buffer,
 					 PurpleConversation *chat, PurpleMessageFlags flags, void *data)
 {
+	char *message, *notification;
+
+	// copy string to temporary variable)
+	message = malloc(s_strlen(buffer)+1);
+	strcpy(message, buffer);
+
+	// message
+	notification = malloc( s_strlen(sender)+s_strlen(message) + 5 );
+	sprintf(notification, "%s: %s", sender, message);
+	
+	gntp_notify("chat-msg-recived", NULL, "Chat Message", notification, NULL);
 }
 
 static void
@@ -364,6 +377,15 @@ static void
 chat_buddy_joined_cb(PurpleConversation *conv, const char *user,
 					 PurpleConvChatBuddyFlags flags, gboolean new_arrival, void *data)
 {
+	//hack to hide spam when join channel
+	if( GetTickCount() - start_tick_chat < 10000) return;
+
+	char *notification;
+
+	notification = malloc( s_strlen(conv->title)+s_strlen(user) + 20 );
+	sprintf(notification, "%s joined %s", user, conv->title);
+	
+	gntp_notify("chat-buddy-sign-in", NULL, "Chat Join", notification, NULL);
 }
 
 static void
@@ -376,6 +398,12 @@ static void
 chat_buddy_left_cb(PurpleConversation *conv, const char *user,
 				   const char *reason, void *data)
 {
+	char *notification;
+
+	notification = malloc( s_strlen(conv->title)+s_strlen(user) + 20 );
+	sprintf(notification, "%s left %s", user, conv->title);
+	
+	gntp_notify("chat-buddy-sign-out", NULL, "Chat Leave", notification, NULL);
 }
 
 static void
@@ -389,12 +417,20 @@ chat_invited_cb(PurpleAccount *account, const char *inviter,
 				const char *room_name, const char *message,
 				const GHashTable *components, void *data)
 {
+	char *notification;
+
+	notification = malloc( s_strlen(inviter)+s_strlen(room_name)+s_strlen(message) + 20 );
+	sprintf(notification, "%s has invited you to %s\n%s", inviter, room_name, message);
+	
+	gntp_notify("chat-invited", NULL, "Chat Invite", notification, NULL);
+	
 	return 0;
 }
 
 static void
 chat_joined_cb(PurpleConversation *conv, void *data)
 {
+	start_tick_chat = GetTickCount();
 }
 
 static void
@@ -406,6 +442,12 @@ static void
 chat_topic_changed_cb(PurpleConversation *conv, const char *who,
 					  const char *topic, void *data)
 {
+	char *notification;
+
+	notification = malloc( s_strlen(who)+s_strlen(conv->title)+s_strlen(topic) + 25 );
+	sprintf(notification, "%s topic: %s\nby %s", conv->title, topic, who);
+	
+	gntp_notify("chat-topic-change", NULL, "Chat Topic Changed", notification, NULL);
 }
 
 /**************************************************************************
@@ -643,4 +685,13 @@ void strip_msn_font_tags(char* str)
 	str[find_char_reverse(str, '<')] = 0;
 	
 	strip_msn_font_tags(str);
+}
+
+int s_strlen(char* str)
+{
+	int len = 0;
+	if(str != NULL)
+		len = strlen(str);
+		
+	return len;
 }
