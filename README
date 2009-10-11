@@ -1,0 +1,4 @@
+Requires pidgin source to build.
+http://developer.pidgin.im/wiki/Installing%20Pidgin#Compiling
+
+compile from '\PIDGIN_VERSION\pidgin\plugins\pidgin_growl' folder
