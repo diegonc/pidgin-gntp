@@ -1,7 +1,7 @@
-#define PLUGIN_NAME 	"Pidgin GNTP"
-#define PLUGIN_AUTHOR 	"Daniel Dimovski <daniel.k.dimovski@gmail.com>"
-#define PLUGIN_DESC 	"Plugin sends Pidgin signals to Growl."
-#define PLUGIN_ID 		"core-pidgin-growl-dkd1"
+#define PLUGIN_NAME		"Pidgin GNTP"
+#define PLUGIN_AUTHOR	"Daniel Dimovski <daniel.k.dimovski@gmail.com>"
+#define PLUGIN_DESC		"Plugin sends Pidgin signals to Growl."
+#define PLUGIN_ID		"core-pidgin-growl-dkd1"
 
 #include <stdio.h>
 
@@ -195,11 +195,16 @@ buddy_icon_changed_cb(PurpleBuddy *buddy)
 	PurpleBuddyIcon* icon = purple_buddy_get_icon(buddy);
 	char* icon_path = purple_buddy_icon_get_full_path(icon);
 	
-	char *growl_msg = malloc( strlen(buddy_nick) + strlen(buddy_name) + 20 );
+	int len = 0;
+	if(buddy_nick != NULL)
+		len = strlen(buddy_nick);
+	if(buddy_name  != NULL )
+		len += strlen(buddy_name);
+		
+	char *growl_msg = malloc( len + 20 );
 	sprintf(growl_msg,"%s changed image\n(%s)", buddy_nick, buddy_name );
 	
 	gntp_notify("buddy-change-image", icon_path, "Pidgin", growl_msg, NULL);
-	
 	free(growl_msg);
 }
 
@@ -214,7 +219,14 @@ buddy_signed_on_cb(PurpleBuddy *buddy, void *data)
 	PurpleBuddyIcon* icon = purple_buddy_get_icon(buddy);
 	char* icon_path = purple_buddy_icon_get_full_path(icon);
 	
-	char *growl_msg = malloc( strlen(buddy_nick) + strlen(buddy_name) + 20 );
+	
+	int len = 10;
+	if(buddy_nick != NULL)
+		len = strlen(buddy_nick);
+	if(buddy_name  != NULL )
+		 len += strlen(buddy_name);
+		
+	char *growl_msg = malloc( len + 20 );
 	
 	sprintf(growl_msg,"%s signed in\n(%s)", buddy_nick, buddy_name );
 	gntp_notify("buddy-sign-in", icon_path, "Pidgin", growl_msg, NULL);
@@ -225,13 +237,18 @@ buddy_signed_on_cb(PurpleBuddy *buddy, void *data)
 static void
 buddy_signed_off_cb(PurpleBuddy *buddy, void *data)
 {
-	
 	char* buddy_nick = purple_buddy_get_alias(buddy);
 	char* buddy_name = purple_buddy_get_name(buddy);
 	PurpleBuddyIcon* icon = purple_buddy_get_icon(buddy);
 	char* icon_path = purple_buddy_icon_get_full_path(icon);
+		
+	int len = 0;
+	if(buddy_nick != NULL)
+		len = strlen(buddy_nick);
+	if(buddy_name  != NULL )
+		 len += strlen(buddy_name);
 	
-	char *growl_msg = malloc( strlen(buddy_nick) + strlen(buddy_name) + 20 );
+	char *growl_msg = malloc( len + 20 );
 	
 	sprintf(growl_msg,"%s signed out\n(%s)", buddy_nick, buddy_name );
 	gntp_notify("buddy-sign-out", icon_path, "Pidgin", growl_msg, NULL);
@@ -301,8 +318,14 @@ received_im_msg_cb(PurpleAccount *account, char *sender, char *buffer,
 	buddy = purple_find_buddy(account, sender);
 	buddy_nick = purple_buddy_get_alias( buddy );
 
+	int len = 0;
+	if(buddy_nick != NULL)
+		len = strlen(buddy_nick);
+	if(message != NULL)
+		len += strlen(message); 
+
 	// message
-	notification = malloc( strlen(buddy_nick) + strlen(message) + 1 );
+	notification = malloc( len + 10 );
 	sprintf(notification, "%s: %s", buddy_nick, message);
 	
 	// icon
