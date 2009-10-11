@@ -20,51 +20,21 @@
 
 unsigned int start_tick;
 
-int find_char(char* str, char c)
-{
-	int i = 0;
-	while(i <= strlen(str))
-	{
-		if(str[i] == c)
-			return i;		
-		i++;
-	}	
-	return -1;
-}
+int find_char(char* str, char c);
+int find_char_reverse(char* str, char c);
+void strip_msn_font_tags(char* str);
 
-int find_char_reverse(char* str, char c)
-{
-	int i = strlen(str);
-	while(i >= 0)
-	{
-		if(str[i] == c)
-			return i;		
-		i--;
-	}	
-	return -1;
-}
 
-void strip_msn_font_tags(char* str)
-{
-	if(str[0] != '<' && str[strlen(str)-1] != '>')
-		return;
-	
-	int front = find_char(str, '>');
-	if(front < 0) return;
-	front++;
+char* server = "127.0.0.1:23053";
+char* appname = PLUGIN_NAME;
 
-	int i = 0;
-	for(i=0; i <= strlen(str); i++)
-	{
-		str[i] = str[front];
-		if(str[front++] == 0)
-			break;
-	}	
-
-	str[find_char_reverse(str, '<')] = 0;
-	
-	strip_msn_font_tags(str);
-}
+char* notifications[6] = {
+	"buddy-sign-in",
+	"buddy-sign-out",
+	"im-msg-recived",
+	"connection-error",
+	"buddy-change-image"
+};
 
 /**************************************************************************
  * send growl message (from mattn's gntp-send commandline program)
@@ -72,13 +42,16 @@ void strip_msn_font_tags(char* str)
  **************************************************************************/
 #include "gntp-send.h"
 
-void gntp_parse_response(int sock)
+void
+gntp_parse_response(int sock)
 {
-	while (1) {
+	while (1)
+	{
 		char* line = recvline(sock);
 		int len = strlen(line);
 		/* fprintf(stderr, "%s\n", line); */
-		if (strncmp(line, "GNTP/1.0 -ERROR", 15) == 0) {
+		if (strncmp(line, "GNTP/1.0 -ERROR", 15) == 0)
+		{
 			purple_debug_error(PLUGIN_NAME, "GNTP/1.0 response: -ERROR\n");
 			free(line);
 			return;
@@ -89,29 +62,15 @@ void gntp_parse_response(int sock)
 	close_socket(sock);
 }
 
-char* server = "127.0.0.1:23053";
-char* appname = "Pidgin";
-
-char* notifications[6] = {
-	"buddy-sign-in",
-	"buddy-sign-out",
-	"im-msg-recived",
-	"connection-error",
-	"buddy-change-image"
-};
-
-
 void
 gntp_register(char* name, char* password)
 {
 	appname = name;
 	int sock = -1;
-	int c;
 	char* salt;
 	char* salthash;
 	char* keyhash;
 	char* authheader = NULL;
-
 
 	#ifdef _WIN32
 		WSADATA wsaData;
@@ -174,7 +133,6 @@ void
 gntp_notify(char* notify, char* icon, char* title, char* message, char* password)
 {
 	int sock = -1;
-	int c;
 	char* salt;
 	char* salthash;
 	char* keyhash;
@@ -212,7 +170,6 @@ gntp_notify(char* notify, char* icon, char* title, char* message, char* password
 #endif
 	}
 
-
 	sendline(sock, "GNTP/1.0 NOTIFY NONE", authheader);
 	sendline(sock, "Application-Name: ", appname);
 	sendline(sock, "Notification-Name: ", notify);
@@ -233,9 +190,17 @@ gntp_notify(char* notify, char* icon, char* title, char* message, char* password
 static void
 buddy_icon_changed_cb(PurpleBuddy *buddy)
 {
-	char growl_msg[2048];
-	sprintf(growl_msg,"%s changed image\n(%s)", purple_buddy_get_alias(buddy), purple_buddy_get_name(buddy) );
-	gntp_notify("buddy-change-image", purple_buddy_icon_get_full_path(purple_buddy_get_icon(buddy)), "Pidgin", growl_msg, NULL);
+	char* buddy_nick = purple_buddy_get_alias(buddy);
+	char* buddy_name = purple_buddy_get_name(buddy);
+	PurpleBuddyIcon* icon = purple_buddy_get_icon(buddy);
+	char* icon_path = purple_buddy_icon_get_full_path(icon);
+	
+	char *growl_msg = malloc( strlen(buddy_nick) + strlen(buddy_name) + 20 );
+	sprintf(growl_msg,"%s changed image\n(%s)", buddy_nick, buddy_name );
+	
+	gntp_notify("buddy-change-image", icon_path, "Pidgin", growl_msg, NULL);
+	
+	free(growl_msg);
 }
 
 /**************************************************************************
@@ -244,17 +209,34 @@ buddy_icon_changed_cb(PurpleBuddy *buddy)
 static void
 buddy_signed_on_cb(PurpleBuddy *buddy, void *data)
 {
-	char growl_msg[2048];
-	sprintf(growl_msg,"%s signed in\n(%s)", purple_buddy_get_alias(buddy), purple_buddy_get_name(buddy) );
-	gntp_notify("buddy-sign-in", purple_buddy_icon_get_full_path(purple_buddy_get_icon(buddy)), "Pidgin", growl_msg, NULL);
+	char* buddy_nick = purple_buddy_get_alias(buddy);
+	char* buddy_name = purple_buddy_get_name(buddy);
+	PurpleBuddyIcon* icon = purple_buddy_get_icon(buddy);
+	char* icon_path = purple_buddy_icon_get_full_path(icon);
+	
+	char *growl_msg = malloc( strlen(buddy_nick) + strlen(buddy_name) + 20 );
+	
+	sprintf(growl_msg,"%s signed in\n(%s)", buddy_nick, buddy_name );
+	gntp_notify("buddy-sign-in", icon_path, "Pidgin", growl_msg, NULL);
+	
+	free(growl_msg);
 }
 
 static void
 buddy_signed_off_cb(PurpleBuddy *buddy, void *data)
 {
-	char growl_msg[2048];
-	sprintf(growl_msg,"%s signed out\n(%s)", purple_buddy_get_alias(buddy), purple_buddy_get_name(buddy) );
-	gntp_notify("buddy-sign-out", purple_buddy_icon_get_full_path(purple_buddy_get_icon(buddy)), "Pidgin", growl_msg, NULL);
+	
+	char* buddy_nick = purple_buddy_get_alias(buddy);
+	char* buddy_name = purple_buddy_get_name(buddy);
+	PurpleBuddyIcon* icon = purple_buddy_get_icon(buddy);
+	char* icon_path = purple_buddy_icon_get_full_path(icon);
+	
+	char *growl_msg = malloc( strlen(buddy_nick) + strlen(buddy_name) + 20 );
+	
+	sprintf(growl_msg,"%s signed out\n(%s)", buddy_nick, buddy_name );
+	gntp_notify("buddy-sign-out", icon_path, "Pidgin", growl_msg, NULL);
+	
+	free(growl_msg);
 }
 
 /**************************************************************************
@@ -272,17 +254,19 @@ signed_off_cb(PurpleConnection *gc, void *data)
 }
 
 static void
-connection_error_cb(PurpleConnection *gc,
-                    PurpleConnectionError err,
-                    const gchar *desc,
-                    void *data)
+connection_error_cb(PurpleConnection *gc, PurpleConnectionError err,
+                    const gchar *desc, void *data)
 {
-	const gchar *username =
-		purple_account_get_username(purple_connection_get_account(gc));
+	PurpleAccount* account = purple_connection_get_account(gc);
+	const gchar *username =	purple_account_get_username(account);
 
-	char growl_msg[2048];
+	int len = strlen(desc) + strlen(username);
+	char *growl_msg = malloc( len + 25 );
 	sprintf(growl_msg, "%s\ncode: %u\n%s", desc, err, username);
+	
 	gntp_notify("connection-error", NULL, "Connection Error", growl_msg, NULL);
+	
+	free(growl_msg);
 }
 
 /**************************************************************************
@@ -304,13 +288,31 @@ static void
 received_im_msg_cb(PurpleAccount *account, char *sender, char *buffer,
 				   PurpleConversation *conv, PurpleMessageFlags flags, void *data)
 {
-	char temp[2048];
-	strcpy(temp, buffer);
-	strip_msn_font_tags(temp);
+	char *message, *notification, *buddy_nick, *iconpath;
+	PurpleBuddy* buddy;
+	PurpleBuddyIcon* icon;
+	
+	// copy string to temporary variable)
+	message = malloc(strlen(buffer)+1);
+	strcpy(message, buffer);
+	strip_msn_font_tags(message);
 
-	char growl_msg[2048];
-	sprintf(growl_msg, "%s: %s", purple_buddy_get_alias(purple_find_buddy(account, sender)), temp);
-	gntp_notify("im-msg-recived", purple_buddy_icon_get_full_path(purple_buddy_get_icon(purple_find_buddy(account, sender))), "IM Recived", growl_msg, NULL);
+	// nickname
+	buddy = purple_find_buddy(account, sender);
+	buddy_nick = purple_buddy_get_alias( buddy );
+
+	// message
+	notification = malloc( strlen(buddy_nick) + strlen(message) + 1 );
+	sprintf(notification, "%s: %s", buddy_nick, message);
+	
+	// icon
+	icon = purple_buddy_get_icon( buddy );
+	iconpath = purple_buddy_icon_get_full_path( icon );
+	
+	gntp_notify("im-msg-recived", iconpath, "IM Recived", notification, NULL);
+	
+	free(message);
+	free(notification);
 }
 
 static void
@@ -443,7 +445,7 @@ notify_emails_cb(char **subjects, char **froms, char **tos, char **urls, guint c
 static gboolean
 plugin_load(PurplePlugin *plugin)
 {
-	gntp_register("Pidgin Growl", NULL);
+	gntp_register(PLUGIN_NAME, NULL);
 
 	void *core_handle     = purple_get_core();
 	void *blist_handle    = purple_blist_get_handle();
@@ -459,7 +461,7 @@ plugin_load(PurplePlugin *plugin)
 						plugin, PURPLE_CALLBACK(buddy_signed_off_cb), NULL);
 	purple_signal_connect(blist_handle, "buddy-icon-changed",
 						plugin, PURPLE_CALLBACK(buddy_icon_changed_cb), NULL);
-
+						
 	/* Connection subsystem signals */
 	purple_signal_connect(conn_handle, "signed-on",
 						plugin, PURPLE_CALLBACK(signed_on_cb), NULL);
@@ -571,3 +573,51 @@ init_plugin(PurplePlugin *plugin)
 }
 
 PURPLE_INIT_PLUGIN(pidgingrowl, init_plugin, info)
+
+
+
+int find_char(char* str, char c)
+{
+	int i = 0;
+	while(i <= strlen(str))
+	{
+		if(str[i] == c)
+			return i;		
+		i++;
+	}	
+	return -1;
+}
+
+int find_char_reverse(char* str, char c)
+{
+	int i = strlen(str);
+	while(i >= 0)
+	{
+		if(str[i] == c)
+			return i;		
+		i--;
+	}	
+	return -1;
+}
+
+void strip_msn_font_tags(char* str)
+{
+	if(str[0] != '<' && str[strlen(str)-1] != '>')
+		return;
+	
+	int front = find_char(str, '>');
+	if(front < 0) return;
+	front++;
+
+	int i = 0;
+	for(i=0; i <= strlen(str); i++)
+	{
+		str[i] = str[front];
+		if(str[front++] == 0)
+			break;
+	}	
+
+	str[find_char_reverse(str, '<')] = 0;
+	
+	strip_msn_font_tags(str);
+}

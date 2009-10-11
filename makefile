@@ -1,14 +1,7 @@
-#
-# Makefile.mingw
-#
-# Description: Makefile for privacy please plugin.
-# Taken from the ticker plugin.
-#
-
 PIDGIN_TREE_TOP := ../../..
 include $(PIDGIN_TREE_TOP)/libpurple/win32/global.mak
 
-TARGET = kp
+TARGET = pidgin-gntp
 
 ##
 ## INCLUDE PATHS
@@ -28,8 +21,8 @@ INCLUDE_PATHS +=	-I. \
 			-I$(PIDGIN_TOP)/win32 \
 			-I$(PIDGIN_TREE_TOP)
 
-LIB_PATHS +=		-L$(GTK_TOP)/lib \
-			-L$(PURPLE_TOP)
+LIB_PATHS +=	-L$(GTK_TOP)/lib \
+				-L$(PURPLE_TOP)
 
 INCLUDE_PATHS += 	-I$(PIDGIN_TREE_TOP)/libpurple
 INCLUDE_PATHS += 	-I$(PIDGIN_TREE_TOP)/../win32-dev/gtk_2_0/include
@@ -45,7 +38,7 @@ OBJECTS = $(C_SRC:%.c=%.o)
 ##
 ## LIBRARIES
 ##
-LIBS =			-l gtk-win32-2.0 \
+LIBS =		-l gtk-win32-2.0 \
 			-l glib-2.0 \
 			-l gdk-win32-2.0 \
 			-l gobject-2.0 \
