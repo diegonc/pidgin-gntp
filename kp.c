@@ -18,8 +18,11 @@
 #include <unistd.h> 
 #include <time.h>
 
+#include "linkedlist.h"
+
 unsigned int start_tick_im;
 unsigned int start_tick_chat;
+unsigned int start_tick_image;
 
 int find_char(char* str, char c);
 int find_char_reverse(char* str, char c);
@@ -30,6 +33,7 @@ int s_strlen(char* str);
 char* server = "127.0.0.1:23053";
 char* appname = PLUGIN_NAME;
 #define ICON_PATH "http://developer.pidgin.im/attachment/wiki/SpreadPidginAvatars/pidgin.2.png?format=raw"
+item* buddy_icon_list = NULL;
 
 char* notifications[] = {
 	"buddy-sign-in",
@@ -194,12 +198,17 @@ static void
 buddy_icon_changed_cb(PurpleBuddy *buddy)
 {	
 	//hack to hide spam when signing on to account
-	if( GetTickCount() - start_tick_im < 10000) return;
-	
+	if( GetTickCount() - start_tick_im < 10000 ) return;
+	if( GetTickCount() - start_tick_image < 3000 ) return;
+
 	char* buddy_nick = purple_buddy_get_alias(buddy);
 	char* buddy_name = purple_buddy_get_name(buddy);
 	PurpleBuddyIcon* icon = purple_buddy_get_icon(buddy);
 	char* icon_path = purple_buddy_icon_get_full_path(icon);
+	if(list_find(buddy_icon_list, icon_path))
+		return;
+	
+	list_add(buddy_icon_list, buddy_name,icon_path);
 	
 	int len = s_strlen(buddy_nick) + s_strlen(buddy_name);
 		
@@ -216,6 +225,7 @@ buddy_icon_changed_cb(PurpleBuddy *buddy)
 static void
 buddy_signed_on_cb(PurpleBuddy *buddy, void *data)
 {
+	start_tick_image = GetTickCount();
 	//hack to hide spam when signing on to account
 	if( GetTickCount() - start_tick_im < 10000) return;
 	
