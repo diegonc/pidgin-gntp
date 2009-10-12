@@ -327,7 +327,8 @@ received_im_msg_cb(PurpleAccount *account, char *sender, char *buffer,
 	// copy string to temporary variable)
 	message = malloc(strlen(buffer)+1);
 	strcpy(message, buffer);
-	strip_msn_font_tags(message);
+	special_entries(message);
+	strip_tags(message);
 
 	// nickname
 	buddy = purple_find_buddy(account, sender);
@@ -370,7 +371,9 @@ received_chat_msg_cb(PurpleAccount *account, char *sender, char *buffer,
 	// copy string to temporary variable)
 	message = malloc(s_strlen(buffer)+1);
 	strcpy(message, buffer);
-
+	special_entries(message);
+	strip_tags(message);
+	
 	// message
 	notification = malloc( s_strlen(sender)+s_strlen(message) + 5 );
 	sprintf(notification, "%s: %s", sender, message);
@@ -648,54 +651,6 @@ init_plugin(PurplePlugin *plugin)
 }
 
 PURPLE_INIT_PLUGIN(pidgingrowl, init_plugin, info)
-
-
-
-int find_char(char* str, char c)
-{
-	int i = 0;
-	while(i <= strlen(str))
-	{
-		if(str[i] == c)
-			return i;		
-		i++;
-	}	
-	return -1;
-}
-
-int find_char_reverse(char* str, char c)
-{
-	int i = strlen(str);
-	while(i >= 0)
-	{
-		if(str[i] == c)
-			return i;		
-		i--;
-	}	
-	return -1;
-}
-
-void strip_msn_font_tags(char* str)
-{
-	if(str[0] != '<' && str[strlen(str)-1] != '>')
-		return;
-	
-	int front = find_char(str, '>');
-	if(front < 0) return;
-	front++;
-
-	int i = 0;
-	for(i=0; i <= strlen(str); i++)
-	{
-		str[i] = str[front];
-		if(str[front++] == 0)
-			break;
-	}	
-
-	str[find_char_reverse(str, '<')] = 0;
-	
-	strip_msn_font_tags(str);
-}
 
 int s_strlen(char* str)
 {
