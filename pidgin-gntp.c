@@ -36,7 +36,7 @@
 #include "prefs.h"
 
 // this projects includes
-#include "linkedlist.h"
+#include "util.h"
 
 
 unsigned int start_tick_im;

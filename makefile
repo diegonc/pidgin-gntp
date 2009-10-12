@@ -31,7 +31,7 @@ LIB_PATHS += 		-L$(PIDGIN_TREE_TOP)/../win32-dev/gtk_2_0/lib
 ##
 ##  SOURCES, OBJECTS
 ##
-C_SRC =			kp.c
+C_SRC =			pidgin-gntp.c
 
 OBJECTS = $(C_SRC:%.c=%.o)
 
