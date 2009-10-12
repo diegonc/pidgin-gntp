@@ -11,7 +11,7 @@
 #define PLUGIN_DESC		"Plugin sends Pidgin signals to Growl."
 #define PLUGIN_ID		"core-pidgin-growl-dkd1"
 #define ICON_PATH 		"http://developer.pidgin.im/attachment/wiki/SpreadPidginAvatars/pidgin.2.png?format=raw"
-
+#define REV				"Pidgin-GNTP rev 9"
 #define SERVER_IP 		"127.0.0.1:23053"
 
 // standard includes
@@ -506,7 +506,7 @@ get_plugin_pref_frame(PurplePlugin *plugin) {
 
 	frame = purple_plugin_pref_frame_new();
 
-	ppref = purple_plugin_pref_new_with_label("Pidgin-GNTP settings");
+	ppref = purple_plugin_pref_new_with_label(REV);
 	purple_plugin_pref_frame_add(frame, ppref);
 
 	ppref = purple_plugin_pref_new_with_name_and_label(
