@@ -127,9 +127,11 @@ void special_entries(char* str)
 			found = 1;
 		if(translate(str, "&lt;",'<'))
 			found = 1;
-		if(translate(str, "&quot;",'\''))
+		if(translate(str, "&quot;",'\"'))
 			found = 1;
 		if(translate(str, "&amp;",'&'))
+			found = 1;
+		if(translate(str, "&apos;",'\''))
 			found = 1;
 			
 	}
