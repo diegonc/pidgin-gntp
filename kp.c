@@ -1,10 +1,25 @@
+#ifdef HAVE_CONFIG_H
+# include <config.h>
+#endif
+
+#ifndef PURPLE_PLUGINS
+# define PURPLE_PLUGINS
+#endif
+
 #define PLUGIN_NAME		"Pidgin GNTP"
 #define PLUGIN_AUTHOR	"Daniel Dimovski <daniel.k.dimovski@gmail.com>"
 #define PLUGIN_DESC		"Plugin sends Pidgin signals to Growl."
 #define PLUGIN_ID		"core-pidgin-growl-dkd1"
+#define ICON_PATH 		"http://developer.pidgin.im/attachment/wiki/SpreadPidginAvatars/pidgin.2.png?format=raw"
 
+#define SERVER_IP 		"127.0.0.1:23053"
+
+// standard includes
 #include <stdio.h>
+#include <unistd.h> 
+#include <time.h>
 
+// pidgin includes
 #include "internal.h"
 #include "connection.h"
 #include "conversation.h"
@@ -15,10 +30,14 @@
 #include "version.h"
 #include "status.h"
 
-#include <unistd.h> 
-#include <time.h>
 
+#include "plugin.h"
+#include "pluginpref.h"
+#include "prefs.h"
+
+// this projects includes
 #include "linkedlist.h"
+
 
 unsigned int start_tick_im;
 unsigned int start_tick_chat;
@@ -29,10 +48,6 @@ int find_char_reverse(char* str, char c);
 void strip_msn_font_tags(char* str);
 int s_strlen(char* str);
 
-
-char* server = "127.0.0.1:23053";
-char* appname = PLUGIN_NAME;
-#define ICON_PATH "http://developer.pidgin.im/attachment/wiki/SpreadPidginAvatars/pidgin.2.png?format=raw"
 item* buddy_icon_list = NULL;
 
 char* notifications[] = {
@@ -48,147 +63,14 @@ char* notifications[] = {
 	"chat-topic-change"
 };
 
-
 /**************************************************************************
  * send growl message (from mattn's gntp-send commandline program)
  * http://github.com/mattn/gntp-send/tree/master
  **************************************************************************/
+void gntp_register(char* password);
+void gntp_notify(char* notify, char* icon, char* title, char* message, char* password);
 #include "gntp-send.h"
 
-void
-gntp_parse_response(int sock)
-{
-	while (1)
-	{
-		char* line = recvline(sock);
-		int len = strlen(line);
-		/* fprintf(stderr, "%s\n", line); */
-		if (strncmp(line, "GNTP/1.0 -ERROR", 15) == 0)
-		{
-			purple_debug_error(PLUGIN_NAME, "GNTP/1.0 response: -ERROR\n");
-			free(line);
-			return;
-		}
-		free(line);
-		if (len == 0) break;
-	}
-	close_socket(sock);
-}
-
-void
-gntp_register(char* name, char* password)
-{
-	appname = name;
-	int sock = -1;
-	char* salt;
-	char* salthash;
-	char* keyhash;
-	char* authheader = NULL;
-
-	#ifdef _WIN32
-		WSADATA wsaData;
-		if (WSAStartup(MAKEWORD(2, 0), &wsaData) != 0)
-		{		
-			WSACleanup();
-			return;
-		}
-		setlocale(LC_CTYPE, "");
-	#endif
-
-	if (password) {
-		srand(time(NULL));
-		salt = gen_salt_alloc(8);
-		keyhash = gen_password_hash_alloc(password, salt);
-		salthash = string_to_hex_alloc(salt, 8);
-		free(salt);
-		authheader = (char*)malloc(strlen(keyhash) + strlen(salthash) + 7);
-		sprintf(authheader, " MD5:%s.%s", keyhash, salthash);
-		free(salthash);
-	}
-
-	sock = create_socket(server);
-	if (sock == -1)
-	{
-		#ifdef _WIN32
-			WSACleanup();
-		#endif
-		return;
-	}
-
-	sendline(sock, "GNTP/1.0 REGISTER NONE", authheader);
-	sendline(sock, "Application-Name: ", appname);
-	sendline(sock, "Application-Icon: ", ICON_PATH);
-	
-	sendline(sock, "Notifications-Count: 10", NULL);
-
-	int it = 0;
-	for(;it < 10; it++ )
-	{
-		sendline(sock, "", NULL);
-		sendline(sock, "Notification-Name: ", notifications[it]);
-		sendline(sock, "Notification-Display-Name: ", notifications[it]);
-		sendline(sock, "Notification-Enabled: True", NULL);
-		sendline(sock, "Notification-Icon: file://", ICON_PATH);
-		
-		sendline(sock, "\n\r", NULL);
-	}
-	sendline(sock, "", NULL);
-	gntp_parse_response(sock);
-
-	sock = 0;
-}
-
-void
-gntp_notify(char* notify, char* icon, char* title, char* message, char* password)
-{
-	int sock = -1;
-	char* salt;
-	char* salthash;
-	char* keyhash;
-	char* authheader = NULL;
-
-#ifdef _WIN32
-	WSADATA wsaData;
-	if (WSAStartup(MAKEWORD(2, 0), &wsaData) != 0)
-	{
-		WSACleanup();
-		return;
-	}
-	setlocale(LC_CTYPE, "");
-#endif
-
-	if (password) {
-		srand(time(NULL));
-		salt = gen_salt_alloc(8);
-		keyhash = gen_password_hash_alloc(password, salt);
-		salthash = string_to_hex_alloc(salt, 8);
-		free(salt);
-		authheader = (char*)malloc(strlen(keyhash) + strlen(salthash) + 7);
-		sprintf(authheader, " MD5:%s.%s", keyhash, salthash);
-		free(salthash);
-	}
-
-	sock = create_socket(server);
-	if (sock == -1)
-	{
-#ifdef _WIN32
-		WSACleanup();
-#endif
-	}
-
-	sendline(sock, "GNTP/1.0 NOTIFY NONE", authheader);
-	sendline(sock, "Application-Name: ", appname);
-	sendline(sock, "Notification-Name: ", notify);
-	sendline(sock, "Notification-Title: ", title);
-	sendline(sock, "Notification-Text: ", message);
-	if (icon) sendline(sock, "Notification-Icon: ", icon);
-	else sendline(sock, "Notification-Icon: ", ICON_PATH);
-	sendline(sock, "", NULL);
-
-	gntp_parse_response(sock);
-
-	sock = 0;
-}
 
 
 /**************************************************************************
@@ -205,6 +87,7 @@ buddy_icon_changed_cb(PurpleBuddy *buddy)
 	char* buddy_name = purple_buddy_get_name(buddy);
 	PurpleBuddyIcon* icon = purple_buddy_get_icon(buddy);
 	char* icon_path = purple_buddy_icon_get_full_path(icon);
+
 	if(list_find(buddy_icon_list, icon_path))
 		return;
 	
@@ -320,6 +203,10 @@ static void
 received_im_msg_cb(PurpleAccount *account, char *sender, char *buffer,
 				   PurpleConversation *conv, PurpleMessageFlags flags, void *data)
 {
+	gboolean on_focus = purple_prefs_get_bool("/plugins/core/pidgin-gntp/bool");
+	if(!on_focus && conv->ui_ops->has_focus(conv))
+			return;
+		
 	char *message, *notification, *buddy_nick, *iconpath;
 	PurpleBuddy* buddy;
 	PurpleBuddyIcon* icon;
@@ -333,7 +220,6 @@ received_im_msg_cb(PurpleAccount *account, char *sender, char *buffer,
 	// nickname
 	buddy = purple_find_buddy(account, sender);
 	buddy_nick = purple_buddy_get_alias( buddy );
-
 
 	int len = s_strlen(buddy_nick) + s_strlen(message);
 
@@ -523,7 +409,7 @@ notify_emails_cb(char **subjects, char **froms, char **tos, char **urls, guint c
 static gboolean
 plugin_load(PurplePlugin *plugin)
 {
-	gntp_register(PLUGIN_NAME, NULL);
+	gntp_register(NULL);
 
 	void *core_handle     = purple_get_core();
 	void *blist_handle    = purple_blist_get_handle();
@@ -611,6 +497,38 @@ plugin_load(PurplePlugin *plugin)
 	return TRUE;
 }
 
+
+
+static PurplePluginPrefFrame *
+get_plugin_pref_frame(PurplePlugin *plugin) {
+	PurplePluginPrefFrame *frame;
+	PurplePluginPref *ppref;
+
+	frame = purple_plugin_pref_frame_new();
+
+	ppref = purple_plugin_pref_new_with_label("Pidgin-GNTP settings");
+	purple_plugin_pref_frame_add(frame, ppref);
+
+	ppref = purple_plugin_pref_new_with_name_and_label(
+											"/plugins/core/pidgin-gntp/bool",
+											"Show message when window is focused");
+	purple_plugin_pref_frame_add(frame, ppref);
+
+	return frame;
+}
+
+static PurplePluginUiInfo prefs_info = {
+	get_plugin_pref_frame,
+	0,   /* page_num (Reserved) */
+	NULL, /* frame (Reserved) */
+	/* Padding */
+	NULL,
+	NULL,
+	NULL,
+	NULL
+};
+ 
+
 static PurplePluginInfo info =
 {
 	PURPLE_PLUGIN_MAGIC,
@@ -636,7 +554,7 @@ static PurplePluginInfo info =
 
 	NULL,				/**< ui_info        */
 	NULL,				/**< extra_info     */
-	NULL,				/**< prefs_info     */
+	&prefs_info,				/**< prefs_info     */
 	NULL,
 	/* Padding */
 	NULL,
@@ -645,18 +563,12 @@ static PurplePluginInfo info =
 	NULL
 };
 
+
 static void
 init_plugin(PurplePlugin *plugin)
 {
+	purple_prefs_add_none("/plugins/core/pidgin-gntp");
+	purple_prefs_add_bool("/plugins/core/pidgin-gntp/bool", TRUE);
 }
 
 PURPLE_INIT_PLUGIN(pidgingrowl, init_plugin, info)
-
-int s_strlen(char* str)
-{
-	int len = 0;
-	if(str != NULL)
-		len = strlen(str);
-		
-	return len;
-}

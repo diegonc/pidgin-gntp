@@ -1,3 +1,4 @@
+// simple linked list
 struct list_el {
    char* name;
    char* icon;
@@ -42,7 +43,7 @@ void list_deallocate(item* head)
 }
 
 
-
+// util functions (used for stripping tags and special chars from messages)
 int abs(int i)
 {
 	if(i<0)
@@ -135,4 +136,14 @@ void special_entries(char* str)
 			found = 1;
 			
 	}
+}
+
+
+int s_strlen(char* str)
+{
+	int len = 0;
+	if(str != NULL)
+		len = strlen(str);
+		
+	return len;
 }

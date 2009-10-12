@@ -405,3 +405,138 @@ char* gen_password_hash_alloc(const char* password, const char* salt) {
 
 	return md5digest;
 }
+
+void
+gntp_parse_response(int sock)
+{
+	while (1)
+	{
+		char* line = recvline(sock);
+		int len = strlen(line);
+		/* fprintf(stderr, "%s\n", line); */
+		if (strncmp(line, "GNTP/1.0 -ERROR", 15) == 0)
+		{
+			purple_debug_error(PLUGIN_NAME, "GNTP/1.0 response: -ERROR\n");
+			free(line);
+			return;
+		}
+		free(line);
+		if (len == 0) break;
+	}
+	close_socket(sock);
+}
+
+void
+gntp_register(char* password)
+{
+	int sock = -1;
+	char* salt;
+	char* salthash;
+	char* keyhash;
+	char* authheader = NULL;
+
+	#ifdef _WIN32
+		WSADATA wsaData;
+		if (WSAStartup(MAKEWORD(2, 0), &wsaData) != 0)
+		{		
+			WSACleanup();
+			return;
+		}
+		setlocale(LC_CTYPE, "");
+	#endif
+
+	if (password) {
+		srand(time(NULL));
+		salt = gen_salt_alloc(8);
+		keyhash = gen_password_hash_alloc(password, salt);
+		salthash = string_to_hex_alloc(salt, 8);
+		free(salt);
+		authheader = (char*)malloc(strlen(keyhash) + strlen(salthash) + 7);
+		sprintf(authheader, " MD5:%s.%s", keyhash, salthash);
+		free(salthash);
+	}
+
+	sock = create_socket(SERVER_IP);
+	if (sock == -1)
+	{
+		#ifdef _WIN32
+			WSACleanup();
+		#endif
+		return;
+	}
+
+	sendline(sock, "GNTP/1.0 REGISTER NONE", authheader);
+	sendline(sock, "Application-Name: ", PLUGIN_NAME);
+	sendline(sock, "Application-Icon: ", ICON_PATH);
+	
+	sendline(sock, "Notifications-Count: 10", NULL);
+
+	int it = 0;
+	for(;it < 10; it++ )
+	{
+		sendline(sock, "", NULL);
+		sendline(sock, "Notification-Name: ", notifications[it]);
+		sendline(sock, "Notification-Display-Name: ", notifications[it]);
+		sendline(sock, "Notification-Enabled: True", NULL);
+		sendline(sock, "Notification-Icon: file://", ICON_PATH);
+		
+		sendline(sock, "\n\r", NULL);
+	}
+	sendline(sock, "", NULL);
+	gntp_parse_response(sock);
+
+	sock = 0;
+}
+
+
+void
+gntp_notify(char* notify, char* icon, char* title, char* message, char* password)
+{
+	int sock = -1;
+	char* salt;
+	char* salthash;
+	char* keyhash;
+	char* authheader = NULL;
+
+#ifdef _WIN32
+	WSADATA wsaData;
+	if (WSAStartup(MAKEWORD(2, 0), &wsaData) != 0)
+	{
+		WSACleanup();
+		return;
+	}
+	setlocale(LC_CTYPE, "");
+#endif
+
+	if (password) {
+		srand(time(NULL));
+		salt = gen_salt_alloc(8);
+		keyhash = gen_password_hash_alloc(password, salt);
+		salthash = string_to_hex_alloc(salt, 8);
+		free(salt);
+		authheader = (char*)malloc(strlen(keyhash) + strlen(salthash) + 7);
+		sprintf(authheader, " MD5:%s.%s", keyhash, salthash);
+		free(salthash);
+	}
+
+	sock = create_socket(SERVER_IP);
+	if (sock == -1)
+	{
+#ifdef _WIN32
+		WSACleanup();
+#endif
+	}
+
+	sendline(sock, "GNTP/1.0 NOTIFY NONE", authheader);
+	sendline(sock, "Application-Name: ", PLUGIN_NAME);
+	sendline(sock, "Notification-Name: ", notify);
+	sendline(sock, "Notification-Title: ", title);
+	sendline(sock, "Notification-Text: ", message);
+	if (icon) sendline(sock, "Notification-Icon: ", icon);
+	else sendline(sock, "Notification-Icon: ", ICON_PATH);
+	sendline(sock, "", NULL);
+
+	gntp_parse_response(sock);
+
+	sock = 0;
+}
