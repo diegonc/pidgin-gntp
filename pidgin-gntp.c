@@ -11,7 +11,7 @@
 #define PLUGIN_DESC		"Plugin sends Pidgin signals to Growl."
 #define PLUGIN_ID		"core-pidgin-growl-dkd1"
 #define ICON_PATH 		"http://developer.pidgin.im/attachment/wiki/SpreadPidginAvatars/pidgin.2.png?format=raw"
-#define REV				"Pidgin-GNTP rev 9"
+#define REV				"Pidgin-GNTP rev 14"
 #define SERVER_IP 		"127.0.0.1:23053"
 
 // standard includes
@@ -110,26 +110,28 @@ account_status_changed_cb(PurpleAccount *account,
 /**************************************************************************
  * Buddy Icons signal callbacks
  **************************************************************************/
+ 
+ 
 static void
 buddy_icon_changed_cb(PurpleBuddy *buddy)
 {	
 	//hack to hide spam when signing on to account
-	if( GetTickCount() - start_tick_im < 10000 ) return;
-	if( GetTickCount() - start_tick_image < 3000 ) return;
+	if( GetTickCount() - start_tick_image < 500 ) return;
 
 	char* buddy_nick = purple_buddy_get_alias(buddy);
 	char* buddy_name = purple_buddy_get_name(buddy);
 	PurpleBuddyIcon* icon = purple_buddy_get_icon(buddy);
 	char* icon_path = purple_buddy_icon_get_full_path(icon);
-
-	if(list_find(buddy_icon_list, icon_path))
-		return;
 	
-	list_add(buddy_icon_list, buddy_name,icon_path);
+	char* chksum = purple_buddy_icons_get_checksum_for_user(buddy);
+	if(list_find(buddy_icon_list, chksum))
+		return;
+	list_add(buddy_icon_list, buddy_name, chksum);
+	
 	
 	int len = s_strlen(buddy_nick) + s_strlen(buddy_name);
 		
-	char *growl_msg = malloc( len + 20 );
+	char *growl_msg = malloc( len + 20 ); 
 	sprintf(growl_msg,"%s changed image\n(%s)", buddy_nick, buddy_name );
 	
 	gntp_notify("buddy-change-image", icon_path, "Pidgin", growl_msg, NULL);
@@ -144,14 +146,17 @@ buddy_signed_on_cb(PurpleBuddy *buddy, void *data)
 {
 	start_tick_image = GetTickCount();
 	//hack to hide spam when signing on to account
-	if( GetTickCount() - start_tick_im < 10000) return;
+	if( GetTickCount() - start_tick_im < 6000) return;
+	
 	
 	char* buddy_nick = purple_buddy_get_alias(buddy);
 	char* buddy_name = purple_buddy_get_name(buddy);
+	
+	purple_blist_update_buddy_icon(buddy);	
+	
 	PurpleBuddyIcon* icon = purple_buddy_get_icon(buddy);
 	char* icon_path = purple_buddy_icon_get_full_path(icon);
-	
-	
+
 	int len = 10;
 	if(buddy_nick != NULL)
 		len = strlen(buddy_nick);
@@ -210,7 +215,7 @@ connection_error_cb(PurpleConnection *gc, PurpleConnectionError err,
 	int len = s_strlen(desc) + s_strlen(username);
 	
 	char *growl_msg = malloc( len + 25 );
-	sprintf(growl_msg, "%s\ncode: %u\n%s", desc, err, username);
+	sprintf(growl_msg, "%s\n%s", desc, username);
 	
 	gntp_notify("connection-error", NULL, "Connection Error", growl_msg, NULL);
 	
