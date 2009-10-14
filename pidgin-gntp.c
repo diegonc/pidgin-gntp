@@ -11,7 +11,7 @@
 #define PLUGIN_DESC		"Plugin sends Pidgin signals to Growl."
 #define PLUGIN_ID		"core-pidgin-growl-dkd1"
 #define ICON_PATH 		"http://developer.pidgin.im/attachment/wiki/SpreadPidginAvatars/pidgin.2.png?format=raw"
-#define REV				"Pidgin-GNTP rev 15"
+#define REV				"Pidgin-GNTP rev 16"
 #define SERVER_IP 		"127.0.0.1:23053"
 
 // standard includes
@@ -150,7 +150,8 @@ buddy_signed_on_cb(PurpleBuddy *buddy, void *data)
 {
 	start_tick_image = GetTickCount();
 	//hack to hide spam when signing on to account
-	if( GetTickCount() - start_tick_im < 6000) return;
+	int hack_ms = purple_prefs_get_int("/plugins/core/pidgin-gntp/hack_ms");
+	if( GetTickCount() - start_tick_im < hack_ms) return;
 	
 	
 	char* buddy_nick = purple_buddy_get_alias(buddy);
@@ -588,6 +589,15 @@ get_plugin_pref_frame(PurplePlugin *plugin) {
 	ppref = purple_plugin_pref_new_with_name_and_label("/plugins/core/pidgin-gntp/on_away",
 												"away");
 	purple_plugin_pref_frame_add(frame, ppref);
+	
+	
+	ppref = purple_plugin_pref_new_with_label("The time to wait until sending 'sign in' messages (prevents spam when connecting):");
+	purple_plugin_pref_frame_add(frame, ppref);
+	ppref = purple_plugin_pref_new_with_name_and_label(
+									"/plugins/core/pidgin-gntp/hack_ms",
+									"(1000 = 1 second)");
+	purple_plugin_pref_set_bounds(ppref, 0, 30000);
+	purple_plugin_pref_frame_add(frame, ppref);
 
 	return frame;
 }
@@ -649,6 +659,8 @@ init_plugin(PurplePlugin *plugin)
 	purple_prefs_add_bool("/plugins/core/pidgin-gntp/on_unavailable", TRUE);
 	purple_prefs_add_bool("/plugins/core/pidgin-gntp/on_invisible", TRUE);
 	purple_prefs_add_bool("/plugins/core/pidgin-gntp/on_away", TRUE);
+	
+	purple_prefs_add_int("/plugins/core/pidgin-gntp/hack_ms", 10000);
 	
 	acc_status = purple_savedstatus_get_type( purple_savedstatus_get_startup() );	
 }
