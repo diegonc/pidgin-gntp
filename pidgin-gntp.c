@@ -11,7 +11,7 @@
 #define PLUGIN_DESC		"Plugin sends Pidgin signals to Growl."
 #define PLUGIN_ID		"core-pidgin-growl-dkd1"
 #define ICON_PATH 		"http://developer.pidgin.im/attachment/wiki/SpreadPidginAvatars/pidgin.2.png?format=raw"
-#define REV				"Pidgin-GNTP rev 14"
+#define REV				"Pidgin-GNTP rev 15"
 #define SERVER_IP 		"127.0.0.1:23053"
 
 // standard includes
@@ -117,6 +117,10 @@ buddy_icon_changed_cb(PurpleBuddy *buddy)
 {	
 	//hack to hide spam when signing on to account
 	if( GetTickCount() - start_tick_image < 500 ) return;
+	
+	PurpleAccount *acc = purple_buddy_get_account(buddy);
+	if(purple_strequal(purple_account_get_protocol_id(acc), "prpl-jabber"))
+		return;
 
 	char* buddy_nick = purple_buddy_get_alias(buddy);
 	char* buddy_name = purple_buddy_get_name(buddy);
