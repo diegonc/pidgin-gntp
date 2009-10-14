@@ -29,7 +29,7 @@
 #include "signals.h"
 #include "version.h"
 #include "status.h"
-
+#include "savedstatuses.h"
 
 #include "plugin.h"
 #include "pluginpref.h"
@@ -49,6 +49,7 @@ void strip_msn_font_tags(char* str);
 int s_strlen(char* str);
 
 item* buddy_icon_list = NULL;
+PurpleStatusPrimitive acc_status = 0;
 
 char* notifications[] = {
 	"buddy-sign-in",
@@ -71,7 +72,40 @@ void gntp_register(char* password);
 void gntp_notify(char* notify, char* icon, char* title, char* message, char* password);
 #include "gntp-send.h"
 
+/********
+checks what the user has decided to allow
+*********/
+static int
+is_allowed()
+{
+	gboolean available = purple_prefs_get_bool("/plugins/core/pidgin-gntp/on_available");
+	gboolean unavailable = purple_prefs_get_bool("/plugins/core/pidgin-gntp/on_unavailable");
+	gboolean invisible = purple_prefs_get_bool("/plugins/core/pidgin-gntp/on_invisible");
+	gboolean away = purple_prefs_get_bool("/plugins/core/pidgin-gntp/on_away");
+	
+	if(!available && acc_status == PURPLE_STATUS_AVAILABLE)
+			return 0;
+	if(!unavailable && acc_status == PURPLE_STATUS_UNAVAILABLE)
+			return 0;
+	if(!invisible && acc_status == PURPLE_STATUS_INVISIBLE)
+			return 0;
+	if(!away && acc_status == PURPLE_STATUS_AWAY)
+			return 0;
+	if(!away && acc_status == PURPLE_STATUS_EXTENDED_AWAY)
+			return 0;
+				
+	return 1;
+}
 
+/**************************************************************************
+ * Account signal callbacks
+ **************************************************************************/
+static void 
+account_status_changed_cb(PurpleAccount *account,
+						PurpleStatus *old_status, PurpleStatus *new_status)
+{
+	acc_status = purple_status_type_get_primitive( purple_status_get_type(new_status) );		
+}
 
 /**************************************************************************
  * Buddy Icons signal callbacks
@@ -202,10 +236,13 @@ sent_im_msg_cb(PurpleAccount *account, const char *recipient, const char *buffer
 static void
 received_im_msg_cb(PurpleAccount *account, char *sender, char *buffer,
 				   PurpleConversation *conv, PurpleMessageFlags flags, void *data)
-{
-	gboolean on_focus = purple_prefs_get_bool("/plugins/core/pidgin-gntp/bool");
-	if(!on_focus && conv->ui_ops->has_focus(conv))
-			return;
+{	
+	gboolean on_focus = purple_prefs_get_bool("/plugins/core/pidgin-gntp/on_focus");
+	if(conv != NULL && !on_focus && conv->ui_ops->has_focus(conv))
+		return;
+
+	if(!is_allowed())
+		return;
 		
 	char *message, *notification, *buddy_nick, *iconpath;
 	PurpleBuddy* buddy;
@@ -254,6 +291,13 @@ received_chat_msg_cb(PurpleAccount *account, char *sender, char *buffer,
 {
 	char *message, *notification;
 
+	gboolean on_focus = purple_prefs_get_bool("/plugins/core/pidgin-gntp/on_focus");
+	if(chat != NULL && !on_focus && chat->ui_ops->has_focus(chat))
+		return;
+
+	if(!is_allowed())
+		return;
+		
 	// copy string to temporary variable)
 	message = malloc(s_strlen(buffer)+1);
 	strcpy(message, buffer);
@@ -412,12 +456,18 @@ plugin_load(PurplePlugin *plugin)
 	gntp_register(NULL);
 
 	void *core_handle     = purple_get_core();
+	void *acc_handle	  = purple_accounts_get_handle();
 	void *blist_handle    = purple_blist_get_handle();
 	void *conn_handle     = purple_connections_get_handle();
 	void *conv_handle     = purple_conversations_get_handle();
 	void *ft_handle       = purple_xfers_get_handle();
 	void *notify_handle   = purple_notify_get_handle();
 
+
+	/* Account subsystem signals */
+	purple_signal_connect(acc_handle, "account-status-changed",
+						plugin, PURPLE_CALLBACK(account_status_changed_cb), NULL);
+						
 	/* Buddy List subsystem signals */
 	purple_signal_connect(blist_handle, "buddy-signed-on",
 						plugin, PURPLE_CALLBACK(buddy_signed_on_cb), NULL);
@@ -509,9 +559,25 @@ get_plugin_pref_frame(PurplePlugin *plugin) {
 	ppref = purple_plugin_pref_new_with_label(REV);
 	purple_plugin_pref_frame_add(frame, ppref);
 
-	ppref = purple_plugin_pref_new_with_name_and_label(
-											"/plugins/core/pidgin-gntp/bool",
-											"Show message when window is focused");
+	ppref = purple_plugin_pref_new_with_name_and_label("/plugins/core/pidgin-gntp/on_focus",
+												"show message when window is focused");
+	purple_plugin_pref_frame_add(frame, ppref);
+	
+	
+	ppref = purple_plugin_pref_new_with_label("show message when status:");
+	purple_plugin_pref_frame_add(frame, ppref);
+	
+	ppref = purple_plugin_pref_new_with_name_and_label("/plugins/core/pidgin-gntp/on_available",
+												"available");
+	purple_plugin_pref_frame_add(frame, ppref);
+	ppref = purple_plugin_pref_new_with_name_and_label("/plugins/core/pidgin-gntp/on_unavailable",
+												"unavailable");
+	purple_plugin_pref_frame_add(frame, ppref);
+	ppref = purple_plugin_pref_new_with_name_and_label("/plugins/core/pidgin-gntp/on_invisible",
+												"invisible");
+	purple_plugin_pref_frame_add(frame, ppref);
+	ppref = purple_plugin_pref_new_with_name_and_label("/plugins/core/pidgin-gntp/on_away",
+												"away");
 	purple_plugin_pref_frame_add(frame, ppref);
 
 	return frame;
@@ -568,7 +634,14 @@ static void
 init_plugin(PurplePlugin *plugin)
 {
 	purple_prefs_add_none("/plugins/core/pidgin-gntp");
-	purple_prefs_add_bool("/plugins/core/pidgin-gntp/bool", TRUE);
+	purple_prefs_add_bool("/plugins/core/pidgin-gntp/on_focus", FALSE);
+	
+	purple_prefs_add_bool("/plugins/core/pidgin-gntp/on_available", TRUE);
+	purple_prefs_add_bool("/plugins/core/pidgin-gntp/on_unavailable", TRUE);
+	purple_prefs_add_bool("/plugins/core/pidgin-gntp/on_invisible", TRUE);
+	purple_prefs_add_bool("/plugins/core/pidgin-gntp/on_away", TRUE);
+	
+	acc_status = purple_savedstatus_get_type( purple_savedstatus_get_startup() );	
 }
 
 PURPLE_INIT_PLUGIN(pidgingrowl, init_plugin, info)
