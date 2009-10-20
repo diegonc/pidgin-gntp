@@ -11,7 +11,7 @@
 #define PLUGIN_DESC		"Plugin sends Pidgin signals to Growl."
 #define PLUGIN_ID		"core-pidgin-growl-dkd1"
 #define ICON_PATH 		"http://developer.pidgin.im/attachment/wiki/SpreadPidginAvatars/pidgin.2.png?format=raw"
-#define REV				"Pidgin-GNTP rev 16"
+#define REV				"Pidgin-GNTP rev 17"
 #define SERVER_IP 		"127.0.0.1:23053"
 
 // standard includes
@@ -76,7 +76,7 @@ void gntp_notify(char* notify, char* icon, char* title, char* message, char* pas
 checks what the user has decided to allow
 *********/
 static int
-is_allowed()
+is_allowed(PurpleAccount *account)
 {
 	gboolean available = purple_prefs_get_bool("/plugins/core/pidgin-gntp/on_available");
 	gboolean unavailable = purple_prefs_get_bool("/plugins/core/pidgin-gntp/on_unavailable");
@@ -93,6 +93,20 @@ is_allowed()
 			return 0;
 	if(!away && acc_status == PURPLE_STATUS_EXTENDED_AWAY)
 			return 0;
+			
+			
+	char* id = purple_account_get_protocol_id (account);		
+	int len = s_strlen("/plugins/core/pidgin-gntp/") + s_strlen(id);
+	
+	char *path = malloc( len + 5 ); 
+	sprintf(path,"%s%s", "/plugins/core/pidgin-gntp/", id );
+	
+	gboolean allowed_protocol = purple_prefs_get_bool(path);
+	free(path);
+	
+	if(!allowed_protocol)
+		return 0;
+		
 				
 	return 1;
 }
@@ -115,10 +129,14 @@ account_status_changed_cb(PurpleAccount *account,
 static void
 buddy_icon_changed_cb(PurpleBuddy *buddy)
 {	
+	if(!is_allowed(purple_buddy_get_account(buddy)))
+		return;
+		
 	//hack to hide spam when signing on to account
 	if( GetTickCount() - start_tick_image < 500 ) return;
 	
 	PurpleAccount *acc = purple_buddy_get_account(buddy);
+		
 	if(purple_strequal(purple_account_get_protocol_id(acc), "prpl-jabber"))
 		return;
 
@@ -148,6 +166,9 @@ buddy_icon_changed_cb(PurpleBuddy *buddy)
 static void
 buddy_signed_on_cb(PurpleBuddy *buddy, void *data)
 {
+	if(!is_allowed(purple_buddy_get_account(buddy)))
+		return;
+		
 	start_tick_image = GetTickCount();
 	//hack to hide spam when signing on to account
 	int hack_ms = purple_prefs_get_int("/plugins/core/pidgin-gntp/hack_ms");
@@ -179,6 +200,9 @@ buddy_signed_on_cb(PurpleBuddy *buddy, void *data)
 static void
 buddy_signed_off_cb(PurpleBuddy *buddy, void *data)
 {
+	if(!is_allowed(purple_buddy_get_account(buddy)))
+		return;
+		
 	char* buddy_nick = purple_buddy_get_alias(buddy);
 	char* buddy_name = purple_buddy_get_name(buddy);
 	PurpleBuddyIcon* icon = purple_buddy_get_icon(buddy);
@@ -247,11 +271,11 @@ static void
 received_im_msg_cb(PurpleAccount *account, char *sender, char *buffer,
 				   PurpleConversation *conv, PurpleMessageFlags flags, void *data)
 {	
+	if(!is_allowed(account))
+		return;
+		
 	gboolean on_focus = purple_prefs_get_bool("/plugins/core/pidgin-gntp/on_focus");
 	if(conv != NULL && !on_focus && conv->ui_ops->has_focus(conv))
-		return;
-
-	if(!is_allowed())
 		return;
 		
 	char *message, *notification, *buddy_nick, *iconpath;
@@ -300,12 +324,15 @@ received_chat_msg_cb(PurpleAccount *account, char *sender, char *buffer,
 					 PurpleConversation *chat, PurpleMessageFlags flags, void *data)
 {
 	char *message, *notification;
-
+	
+	if(!is_allowed(account))
+		return;
+		
 	gboolean on_focus = purple_prefs_get_bool("/plugins/core/pidgin-gntp/on_focus");
 	if(chat != NULL && !on_focus && chat->ui_ops->has_focus(chat))
 		return;
 
-	if(!is_allowed())
+	if(!is_allowed(account))
 		return;
 		
 	// copy string to temporary variable)
@@ -329,7 +356,10 @@ conversation_created_cb(PurpleConversation *conv, void *data)
 static void
 chat_buddy_joined_cb(PurpleConversation *conv, const char *user,
 					 PurpleConvChatBuddyFlags flags, gboolean new_arrival, void *data)
-{
+{	
+	if(!is_allowed(purple_conversation_get_account(conv)))
+		return;
+		
 	//hack to hide spam when join channel
 	if( GetTickCount() - start_tick_chat < 10000) return;
 
@@ -352,7 +382,9 @@ chat_buddy_left_cb(PurpleConversation *conv, const char *user,
 				   const char *reason, void *data)
 {
 	char *notification;
-
+	if(!is_allowed(purple_conversation_get_account(conv)))
+		return;
+		
 	notification = malloc( s_strlen(conv->title)+s_strlen(user) + 20 );
 	sprintf(notification, "%s left %s", user, conv->title);
 	
@@ -371,7 +403,10 @@ chat_invited_cb(PurpleAccount *account, const char *inviter,
 				const GHashTable *components, void *data)
 {
 	char *notification;
-
+	
+	if(!is_allowed(account))
+		return;
+		
 	notification = malloc( s_strlen(inviter)+s_strlen(room_name)+s_strlen(message) + 20 );
 	sprintf(notification, "%s has invited you to %s\n%s", inviter, room_name, message);
 	
@@ -397,6 +432,9 @@ chat_topic_changed_cb(PurpleConversation *conv, const char *who,
 {
 	char *notification;
 
+	if(!is_allowed(purple_conversation_get_account(conv)))
+		return;
+		
 	notification = malloc( s_strlen(who)+s_strlen(conv->title)+s_strlen(topic) + 25 );
 	sprintf(notification, "%s topic: %s\nby %s", conv->title, topic, who);
 	
@@ -566,15 +604,12 @@ get_plugin_pref_frame(PurplePlugin *plugin) {
 
 	frame = purple_plugin_pref_frame_new();
 
-	ppref = purple_plugin_pref_new_with_label(REV);
-	purple_plugin_pref_frame_add(frame, ppref);
-
 	ppref = purple_plugin_pref_new_with_name_and_label("/plugins/core/pidgin-gntp/on_focus",
 												"show message when window is focused");
 	purple_plugin_pref_frame_add(frame, ppref);
 	
 	
-	ppref = purple_plugin_pref_new_with_label("show message when status:");
+	ppref = purple_plugin_pref_new_with_label("Send notifications when status is:");
 	purple_plugin_pref_frame_add(frame, ppref);
 	
 	ppref = purple_plugin_pref_new_with_name_and_label("/plugins/core/pidgin-gntp/on_available",
@@ -591,12 +626,40 @@ get_plugin_pref_frame(PurplePlugin *plugin) {
 	purple_plugin_pref_frame_add(frame, ppref);
 	
 	
-	ppref = purple_plugin_pref_new_with_label("The time to wait until sending 'sign in' messages (prevents spam when connecting):");
+	ppref = purple_plugin_pref_new_with_label("Starting delay (to prevent spam while connecting):");
 	purple_plugin_pref_frame_add(frame, ppref);
 	ppref = purple_plugin_pref_new_with_name_and_label(
 									"/plugins/core/pidgin-gntp/hack_ms",
-									"(1000 = 1 second)");
+									"value in milliseconds (1000ms = 1 sec)");
 	purple_plugin_pref_set_bounds(ppref, 0, 30000);
+	purple_plugin_pref_frame_add(frame, ppref);
+	
+	
+	ppref = purple_plugin_pref_new_with_label("Following protocols sends notifications:");
+	purple_plugin_pref_frame_add(frame, ppref);
+		
+	GList *l;
+	PurpleAccount *account;
+	for (l = purple_accounts_get_all(); l != NULL; l = l->next)
+	{
+		account = (PurpleAccount *)l->data;
+		
+		char* name = purple_account_get_protocol_name (account);
+		char* id = purple_account_get_protocol_id (account);		
+		
+		int len = s_strlen("/plugins/core/pidgin-gntp/") + s_strlen(id);
+		char *path = malloc( len + 5 ); 
+		sprintf(path,"%s%s", "/plugins/core/pidgin-gntp/", id );
+			
+		purple_prefs_add_bool(path, TRUE);
+		ppref = purple_plugin_pref_new_with_name_and_label(path, name);
+		purple_plugin_pref_frame_add(frame, ppref);
+		
+		free(path);
+	}
+	
+	
+	ppref = purple_plugin_pref_new_with_label(REV);
 	purple_plugin_pref_frame_add(frame, ppref);
 
 	return frame;
@@ -662,7 +725,7 @@ init_plugin(PurplePlugin *plugin)
 	
 	purple_prefs_add_int("/plugins/core/pidgin-gntp/hack_ms", 10000);
 	
-	acc_status = purple_savedstatus_get_type( purple_savedstatus_get_startup() );	
+	acc_status = purple_savedstatus_get_type( purple_savedstatus_get_startup() );		
 }
 
 PURPLE_INIT_PLUGIN(pidgingrowl, init_plugin, info)
