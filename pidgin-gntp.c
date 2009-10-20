@@ -154,9 +154,9 @@ buddy_icon_changed_cb(PurpleBuddy *buddy)
 	int len = s_strlen(buddy_nick) + s_strlen(buddy_name);
 		
 	char *growl_msg = malloc( len + 20 ); 
-	sprintf(growl_msg,"%s changed image\n(%s)", buddy_nick, buddy_name );
+	sprintf(growl_msg,"%s\n%s", buddy_nick, buddy_name );
 	
-	gntp_notify("buddy-change-image", icon_path, "Pidgin", growl_msg, NULL);
+	gntp_notify("buddy-change-image", icon_path, "Changed Image", growl_msg, NULL);
 	free(growl_msg);
 }
 
@@ -191,8 +191,8 @@ buddy_signed_on_cb(PurpleBuddy *buddy, void *data)
 		
 	char *growl_msg = malloc( len + 20 );
 	
-	sprintf(growl_msg,"%s signed in\n(%s)", buddy_nick, buddy_name );
-	gntp_notify("buddy-sign-in", icon_path, "Pidgin", growl_msg, NULL);
+	sprintf(growl_msg,"%s\n%s", buddy_nick, buddy_name );
+	gntp_notify("buddy-sign-in", icon_path, "Signed In", growl_msg, NULL);
 	
 	free(growl_msg);
 }
@@ -212,8 +212,8 @@ buddy_signed_off_cb(PurpleBuddy *buddy, void *data)
 	
 	char *growl_msg = malloc( len + 20 );
 	
-	sprintf(growl_msg,"%s signed out\n(%s)", buddy_nick, buddy_name );
-	gntp_notify("buddy-sign-out", icon_path, "Pidgin", growl_msg, NULL);
+	sprintf(growl_msg,"%s\n%s", buddy_nick, buddy_name );
+	gntp_notify("buddy-sign-out", icon_path, "Signed Off", growl_msg, NULL);
 	
 	free(growl_msg);
 }
@@ -302,7 +302,7 @@ received_im_msg_cb(PurpleAccount *account, char *sender, char *buffer,
 	icon = purple_buddy_get_icon( buddy );
 	iconpath = purple_buddy_icon_get_full_path( icon );
 	
-	gntp_notify("im-msg-recived", iconpath, "IM Recived", notification, NULL);
+	gntp_notify("im-msg-recived", iconpath, "IM Message", notification, NULL);
 	
 	free(message);
 	free(notification);
