@@ -11,7 +11,6 @@
 #ifdef _WIN32
 #include <locale.h>
 #include <winsock2.h>
-#pragma comment (lib, "ws2_32.lib")
 #else
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -52,6 +51,15 @@ typedef struct {
 static void md5_starts(md5_context *ctx);
 static void md5_update(md5_context *ctx, const uint8 *input, uint32 length);
 static void md5_finish(md5_context *ctx, uint8 digest[16]);
+
+
+void gntp_notify(char* notify, char* icon, char* title, char* message, char* password);
+void gntp_register(char* password);
+void gntp_parse_response(int sock);
+int create_socket(const char* server);
+
+char* gen_salt_alloc(int count);
+char* gen_password_hash_alloc(const char* password, const char* salt);
 
 #define GET_UINT32(n, b, i)     n = b[i] + (b[i+1]<<8) + (b[i+2]<<16) + (b[i+3]<<24)
 #define PUT_UINT32(n, b, i)     do { b[i] = n; b[i+1] = n >> 8; b[i+2] = n >> 16; b[i+3] = n >> 24; } while(0)
@@ -271,7 +279,7 @@ static void sendline(int sock, const char* str, const char* val) {
 }
 
 static char* recvline(int sock) {
-	const static int growsize = 80;
+	static const int growsize = 80;
 	char c = 0;
 	char* line = (char*) malloc(growsize);
 	int len = growsize, pos = 0;
@@ -289,13 +297,14 @@ static char* recvline(int sock) {
 	return line;
 }
 
-int create_socket(const char* server) {
+int create_socket(const char* server)
+{
 	int sock = -1;
 	struct sockaddr_in serv_addr;
 	struct hostent* host_ent;
-	char value = 1; 
 	char* host = strdup(server);
 	char* port = strchr(host, ':');
+	int errcode = 0;
 
 	if (port) *port++ = 0;
 	else port = "23053";
@@ -318,7 +327,6 @@ int create_socket(const char* server) {
 	memcpy(&serv_addr.sin_addr, host_ent->h_addr, host_ent->h_length );
 	serv_addr.sin_port = htons((short)atol(port));
 	
-	int errcode = 0;
 	errcode = connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0;
 	if ( errcode < 0 ) {
 		purple_debug_error(PLUGIN_NAME, "connect returned (%d)\n", errcode);
@@ -351,8 +359,10 @@ static char* string_to_hex_alloc(const char* str, int len) {
     }
     return tmp;
 }
-
-static char* string_to_utf8_alloc(const char* str) {
+/*
+static char*
+string_to_utf8_alloc(const char* str)
+{
 #ifdef _WIN32
 	unsigned int codepage;
 	size_t in_len = strlen(str);
@@ -376,8 +386,9 @@ static char* string_to_utf8_alloc(const char* str) {
 	return strdup(str);
 #endif
 }
-
-char* gen_salt_alloc(int count) {
+*/
+char* gen_salt_alloc(int count)
+{
 	char* salt = (char*)malloc(count + 1);
 	int n;
 	for (n = 0; n < count; n++) salt[n] = (((int)rand()) % 255) + 1;
@@ -385,12 +396,13 @@ char* gen_salt_alloc(int count) {
 	return salt;
 }
 
-char* gen_password_hash_alloc(const char* password, const char* salt) {
+char* gen_password_hash_alloc(const char* password, const char* salt)
+{
 	md5_context md5ctx;
 	char md5tmp[20];
 	char* md5digest;
-	char* md5hexdigest;
-	int n;
+	//char* md5hexdigest;
+	//int n;
 
 	memset(md5tmp, 0, sizeof(md5tmp));
 	md5_starts(&md5ctx);
@@ -434,7 +446,8 @@ gntp_register(char* password)
 	char* salthash;
 	char* keyhash;
 	char* authheader = NULL;
-
+	int it = 0;
+	
 	#ifdef _WIN32
 		WSADATA wsaData;
 		if (WSAStartup(MAKEWORD(2, 0), &wsaData) != 0)
@@ -471,7 +484,6 @@ gntp_register(char* password)
 	
 	sendline(sock, "Notifications-Count: 10", NULL);
 
-	int it = 0;
 	for(;it < 10; it++ )
 	{
 		sendline(sock, "", NULL);

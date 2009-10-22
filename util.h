@@ -1,47 +1,9 @@
-// simple linked list
-struct list_el {
-   char* name;
-   char* data;
-   
-   struct list_el * next;
-};
-
-typedef struct list_el item;
-
-void list_add(item* head, char* username, char *data)
-{
-	item *new_item = (item *)malloc(sizeof(item));
-	new_item->name = username;
-	new_item->data = data;
-	
-    new_item->next = head;
-    head = new_item;
-}
-
-boolean list_find(item* head, char* data)
-{
-	item *walker = head;
-	while(walker != NULL)
-	{
-		if( strcmp(walker->data, data) == 0 )
-		{
-			return 1;
-		}
-		walker = walker->next;
-	}
-	return 0;
-}
-
-void list_deallocate(item* head)
-{
-	while(head != NULL)
-	{
-		item *next = head->next;
-		free(head);
-		head = next;		
-	}
-}
-
+int s_strlen(char* str);
+void special_entries(char* str);
+int translate(char* str, char* entry, char replace);
+void strip_tags(char* str);
+void substr_remove(char* str, int from, int to);
+int abs(int i);
 
 // util functions (used for stripping tags and special chars from messages)
 int abs(int i)
@@ -97,7 +59,6 @@ void strip_tags(char* str)
 		i++;
 	}		 
 }
-
 
 int translate(char* str, char* entry, char replace)
 {
