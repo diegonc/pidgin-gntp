@@ -11,7 +11,7 @@
 #define PLUGIN_DESC		"Plugin sends Pidgin signals to Growl."
 #define PLUGIN_ID		"core-pidgin-growl-dkd1"
 #define ICON_PATH 		"http://developer.pidgin.im/attachment/wiki/SpreadPidginAvatars/pidgin.2.png?format=raw"
-#define REV				"Pidgin-GNTP rev 17"
+#define REV				"Pidgin-GNTP rev 19"
 #define SERVER_IP 		"127.0.0.1:23053"
 	
 #if 0

@@ -2,9 +2,3 @@ Requires pidgin source to build.
 http://developer.pidgin.im/wiki/Installing%20Pidgin#Compiling
 
 compile from '\PIDGIN_VERSION\pidgin\plugins\pidgin_growl' folder
-
-To do list:
-	* fix icon-change (double spam)
-	* message recived only when not active window
-	* settings window
-	* status change event
