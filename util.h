@@ -5,6 +5,26 @@ void strip_tags(char* str);
 void substr_remove(char* str, int from, int to);
 int abs(int i);
 
+// helper functions
+char* 
+custom_get_buddy_status_text(PurpleBuddy *buddy)
+{
+	PurplePluginProtocolInfo *prpl_info;
+	PurplePlugin *prpl;
+	char* protocol_id;
+	PurpleAccount* account = purple_buddy_get_account(buddy);
+	
+	protocol_id = (char *)purple_account_get_protocol_id(account);
+	prpl = purple_find_prpl(protocol_id);
+	
+	prpl_info = PURPLE_PLUGIN_PROTOCOL_INFO(prpl);
+	
+	if( prpl_info == NULL || prpl_info->status_text == NULL )	
+		return NULL;
+	
+	return prpl_info->status_text(buddy);
+}
+		
 // util functions (used for stripping tags and special chars from messages)
 int abs(int i)
 {

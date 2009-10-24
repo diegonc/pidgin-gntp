@@ -482,9 +482,9 @@ gntp_register(char* password)
 	sendline(sock, "Application-Name: ", PLUGIN_NAME);
 	sendline(sock, "Application-Icon: ", ICON_PATH);
 	
-	sendline(sock, "Notifications-Count: 10", NULL);
+	sendline(sock, "Notifications-Count: 11", NULL);
 
-	for(;it < 10; it++ )
+	for(;it < 11; it++ )
 	{
 		sendline(sock, "", NULL);
 		sendline(sock, "Notification-Name: ", notifications[it]);

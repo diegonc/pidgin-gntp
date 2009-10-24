@@ -1,5 +1,5 @@
 #ifdef HAVE_CONFIG_H
-# include <config.h>
+# include "config.h"
 #endif
 
 #ifndef PURPLE_PLUGINS
@@ -17,9 +17,10 @@
 #if 0
 	#define DEBUG_MSG(x) MessageBox(0,x,"DEBUG",0);
 #else
-	#define DEBUG_MSG(x) purple_debug(PURPLE_DEBUG_INFO, NULL, x);
+	#define DEBUG_MSG(x) purple_debug(PURPLE_DEBUG_INFO, "pidgin-gntp", x);
 #endif
-	
+#define DEBUG_ERROR(x) purple_debug(PURPLE_DEBUG_ERROR, "pidgin-gntp", x);
+
 // standard includes
 #include <stdio.h>
 #include <unistd.h> 
@@ -41,6 +42,8 @@
 #include "pluginpref.h"
 #include "prefs.h"
 
+char* custom_get_buddy_status_text(PurpleBuddy *buddy);
+
 // this projects includes
 #include "util.h"
 
@@ -49,7 +52,7 @@ int find_char_reverse(char* str, char c);
 void strip_msn_font_tags(char* str);
 int s_strlen(char* str);
 
-
+GList *img_list = NULL;
 PurpleStatusPrimitive acc_status = 0;
 
 unsigned int start_tick_im;
@@ -59,6 +62,7 @@ unsigned int start_tick_image;
 char* notifications[] = {
 	"buddy-sign-in",
 	"buddy-sign-out",
+	"buddy-status-change",
 	"im-msg-recived",
 	"connection-error",
 	"buddy-change-image",
