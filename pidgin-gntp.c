@@ -68,11 +68,7 @@ buddy_icon_changed_cb(PurpleBuddy *buddy)
 	
 	DEBUG_MSG("buddy_icon_changed_cb\n");
 	
-	if(buddy == NULL)
-	{
-		DEBUG_ERROR("buddy is NULL - leaving function\n")
-		return;
-	}
+	g_return_if_fail( buddy != NULL );
 
 	buddy_nick = (char*)purple_buddy_get_alias(buddy);
 	buddy_name = (char*)purple_buddy_get_name(buddy);
@@ -114,6 +110,37 @@ buddy_icon_changed_cb(PurpleBuddy *buddy)
 	free(growl_msg);
 }
 
+
+
+
+
+// returns NULL if its the same
+GList* buddy_status_is_new(PurpleBuddy* buddy, char* status_msg)
+{
+	struct buddy_status temp; 
+	temp.buddy = buddy;
+	GList* node = g_list_find_custom(buddys_status, &temp, (GCompareFunc)compare_status);
+	if(node != NULL)
+	{
+		DEBUG_MSG("buddy status node found\n");
+		struct buddy_status* node_status = node->data;
+		if(strcmp(status_msg, node_status->status) == 0)
+			return NULL;
+	}
+	else
+	{
+		DEBUG_MSG("buddy status node created\n");
+		struct buddy_status* node_status = malloc(sizeof(struct buddy_status));
+		char* the_status = malloc( s_strlen(status_msg)+1 );
+		strcpy(the_status, status_msg);
+		
+		node_status->buddy = buddy;
+		node_status->status = the_status;
+		buddys_status = g_list_prepend(buddys_status, node_status);
+	}
+	
+	return node;
+}
 /**************************************************************************
  * Buddy List subsystem signal callbacks
  **************************************************************************/				
@@ -125,49 +152,74 @@ buddy_status_changed_cb(PurpleBuddy *buddy, PurpleStatus *old_status, PurpleStat
 	PurpleBuddyIcon* icon;
 	int len, hack_ms;
 	PurpleAccount* account;
-	
+
 	DEBUG_MSG("buddy_status_changed_cb\n");
+	
+	g_return_if_fail( buddy != NULL );
+	account = purple_buddy_get_account(buddy);
+	g_return_if_fail( is_allowed(account) );	
+
+	status_name 	= (char *)purple_status_get_name(status);
+	old_status_name = (char *)purple_status_get_name(old_status);
+	buddy_nick = (char*)purple_buddy_get_alias(buddy);
+	buddy_name = (char*)purple_buddy_get_name(buddy);
+	icon = purple_buddy_get_icon(buddy);
+	icon_path = (char*)purple_buddy_icon_get_full_path(icon);
+
+	status_msg = custom_get_buddy_status_text(buddy);
+	if( status_msg == NULL )
+		status_msg = "";
+	special_entries(status_msg);
+	strip_tags(status_msg);
 		
 	//hack to hide spam when signing on to account
 	hack_ms = purple_prefs_get_int("/plugins/core/pidgin-gntp/hack_ms");
+	
+	GList *node = buddy_status_is_new(buddy, status_msg);
+	
 	if( GetTickCount() - start_tick_im < hack_ms) return;
 	
-	g_return_if_fail( buddy != NULL );
-	
-	account = purple_buddy_get_account(buddy);
-	
-	g_return_if_fail( is_allowed(account) );	
+	if( node != NULL )
+	{
+		DEBUG_MSG("status node recived\n");
+		struct buddy_status* node_status = node->data;
 		
-	status_name 	= (char *)purple_status_get_name(status);
-	old_status_name = (char *)purple_status_get_name(old_status);
-	
-	buddy_nick = (char*)purple_buddy_get_alias(buddy);
-	buddy_name = (char*)purple_buddy_get_name(buddy);
+		free(node_status->status);
+		char* the_status = malloc( s_strlen(status_msg)+1 );
+		strcpy(the_status, status_msg);
+		node_status->status = the_status;
 		
-	icon = purple_buddy_get_icon(buddy);
-	icon_path = (char*)purple_buddy_icon_get_full_path(icon);
-		
-	if( strcmp(status_name, old_status_name) == 0 )
-	{				
-		status_msg = custom_get_buddy_status_text(buddy);
-		g_return_if_fail( status_msg != NULL );
-		
-		len = s_strlen(buddy_nick) + s_strlen(buddy_name) + s_strlen(status_msg)+22;
-		growl_msg = malloc( len );
-		g_snprintf(growl_msg, len, "%s status message: \"%s\"\n%s",
-											buddy_nick, status_msg, buddy_name );
-											
-		gntp_notify("buddy-status-change", icon_path, "Status Changed", growl_msg, NULL);
-		free(growl_msg);
-		return;
+		if(status_msg[0] == 0)
+		{	
+			len = s_strlen(buddy_nick) + s_strlen(buddy_name) + 25;
+			growl_msg = malloc( len );
+			g_snprintf(growl_msg, len, "status message removed\n%s\n%s",
+												buddy_nick, buddy_name );
+												
+			gntp_notify("buddy-status-change", icon_path, "Status Changed", growl_msg, NULL);
+			free(growl_msg);
+		}
+		else
+		{
+			len = s_strlen(buddy_nick) + s_strlen(buddy_name) + s_strlen(status_msg)+5;
+			growl_msg = malloc( len );
+			g_snprintf(growl_msg, len, "\"%s\"\n%s\n%s",
+												status_msg, buddy_nick, buddy_name );
+												
+			gntp_notify("buddy-status-change", icon_path, "Status Changed", growl_msg, NULL);
+			free(growl_msg);
+		}
 	}
+	
+	if( strcmp(status_name, old_status_name) == 0)
+		return;
 		
-	len = s_strlen(buddy_nick) + s_strlen(buddy_name) + s_strlen(status_name) + 10;
+	len = s_strlen(buddy_nick) + s_strlen(buddy_name) + s_strlen(status_name) + 3;
 		
 	growl_msg = malloc( len );
 	
-	g_snprintf(growl_msg, len, "%s is now %s\n%s",
-										buddy_nick, status_name, buddy_name );
+	g_snprintf(growl_msg, len, "%s\n%s\n%s",
+										status_name, buddy_nick, buddy_name );
 										
 	gntp_notify("buddy-status-change", icon_path, "Status Changed", growl_msg, NULL);
 	
@@ -183,9 +235,9 @@ buddy_signed_on_cb(PurpleBuddy *buddy, void *data)
 	int len = 2;
 
 	DEBUG_MSG("buddy_signed_on_cb\n");
-		
-	if(!is_allowed(purple_buddy_get_account(buddy)))
-		return;
+	
+	g_return_if_fail( buddy != NULL );	
+	g_return_if_fail( is_allowed(purple_buddy_get_account(buddy)) );
 		
 	start_tick_image = GetTickCount();
 	//hack to hide spam when signing on to account
@@ -222,9 +274,9 @@ buddy_signed_off_cb(PurpleBuddy *buddy, void *data)
 	PurpleBuddyIcon* icon;
 
 	DEBUG_MSG("buddy_signed_off_cb\n");
-		
-	if(!is_allowed(purple_buddy_get_account(buddy)))
-		return;
+	
+	g_return_if_fail( buddy != NULL );	
+	g_return_if_fail( is_allowed(purple_buddy_get_account(buddy)) );
 		
 	buddy_nick = (char*)purple_buddy_get_alias(buddy);
 	buddy_name = (char*)purple_buddy_get_name(buddy);
@@ -303,8 +355,7 @@ received_im_msg_cb(PurpleAccount *account, char *sender, char *buffer,
 	
 	DEBUG_MSG("received_im_msg_cb\n");
 		
-	if(!is_allowed(account))
-		return;
+	g_return_if_fail( is_allowed(account) );
 		
 	on_focus = purple_prefs_get_bool("/plugins/core/pidgin-gntp/on_focus");
 	if(conv != NULL && !on_focus && conv->ui_ops->has_focus(conv))
@@ -362,14 +413,10 @@ received_chat_msg_cb(PurpleAccount *account, char *sender, char *buffer,
 	
 	DEBUG_MSG("received_chat_msg_cb\n");
 		
-	if(!is_allowed(account))
-		return;
+	g_return_if_fail( is_allowed(account) );
 		
 	on_focus = purple_prefs_get_bool("/plugins/core/pidgin-gntp/on_focus");
 	if(chat != NULL && !on_focus && chat->ui_ops->has_focus(chat))
-		return;
-
-	if(!is_allowed(account))
 		return;
 		
 	// copy string to temporary variable)
@@ -403,8 +450,7 @@ chat_buddy_joined_cb(PurpleConversation *conv, const char *user,
 	
 	DEBUG_MSG("chat_buddy_joined_cb\n");
 	
-	if(!is_allowed(purple_conversation_get_account(conv)))
-		return;
+	g_return_if_fail( is_allowed(purple_conversation_get_account(conv)) );
 		
 	//hack to hide spam when join channel
 	if( GetTickCount() - start_tick_chat < 10000) return;
@@ -431,8 +477,7 @@ chat_buddy_left_cb(PurpleConversation *conv, const char *user,
 	
 	DEBUG_MSG("chat_buddy_left_cb\n");
 	
-	if(!is_allowed(purple_conversation_get_account(conv)))
-		return;
+	g_return_if_fail( is_allowed(purple_conversation_get_account(conv)) );
 		
 	notification = malloc( len );
 	g_snprintf(notification, len, "%s left %s", user, conv->title);
@@ -459,7 +504,7 @@ chat_invited_cb(PurpleAccount *account, const char *inviter,
 	
 	DEBUG_MSG("chat_invited_cb\n");
 	
-	if(!is_allowed(account))
+	if( !is_allowed(account) )
 		return 0;
 		
 	notification = malloc( len );
@@ -496,8 +541,7 @@ chat_topic_changed_cb(PurpleConversation *conv, const char *who,
 	if(conv == NULL || topic == NULL || who == NULL)
 		return;
 	
-	if(!is_allowed(purple_conversation_get_account(conv)))
-		return;
+	g_return_if_fail( is_allowed(purple_conversation_get_account(conv)) );
 		
 	notification = malloc( len );
 					

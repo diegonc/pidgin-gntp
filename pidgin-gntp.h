@@ -11,7 +11,7 @@
 #define PLUGIN_DESC		"Plugin sends Pidgin signals to Growl."
 #define PLUGIN_ID		"core-pidgin-growl-dkd1"
 #define ICON_PATH 		"http://developer.pidgin.im/attachment/wiki/SpreadPidginAvatars/pidgin.2.png?format=raw"
-#define REV				"Pidgin-GNTP rev 19"
+#define REV				"Pidgin-GNTP rev 22"
 #define SERVER_IP 		"127.0.0.1:23053"
 	
 #if 0
@@ -52,12 +52,15 @@ int find_char_reverse(char* str, char c);
 void strip_msn_font_tags(char* str);
 int s_strlen(char* str);
 
+
+GList *buddys_status = NULL;
 GList *img_list = NULL;
 PurpleStatusPrimitive acc_status = 0;
 
 unsigned int start_tick_im;
 unsigned int start_tick_chat;
 unsigned int start_tick_image;
+
 
 char* notifications[] = {
 	"buddy-sign-in",
@@ -73,6 +76,21 @@ char* notifications[] = {
 	"chat-topic-change"
 };
 
+struct buddy_status
+{
+	PurpleBuddy *buddy;
+	char* status;	
+};
+
+gint compare_status(struct buddy_status* a, struct buddy_status* b)
+{
+	if( a->buddy == b->buddy )
+		return 0;
+	else 
+		return 1;
+}
+	
+	
 /**************************************************************************
  * send growl message (from mattn's gntp-send commandline program)
  * http://github.com/mattn/gntp-send/tree/master
