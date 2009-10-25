@@ -65,7 +65,8 @@ unsigned int start_tick_image;
 char* notifications[] = {
 	"buddy-sign-in",
 	"buddy-sign-out",
-	"buddy-status-change",
+	"buddy-change-status",
+	"buddy-change-msg",
 	"im-msg-recived",
 	"connection-error",
 	"buddy-change-image",

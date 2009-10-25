@@ -193,10 +193,9 @@ buddy_status_changed_cb(PurpleBuddy *buddy, PurpleStatus *old_status, PurpleStat
 		{	
 			len = s_strlen(buddy_nick) + s_strlen(buddy_name) + 25;
 			growl_msg = malloc( len );
-			g_snprintf(growl_msg, len, "status message removed\n%s\n%s",
-												buddy_nick, buddy_name );
-												
-			gntp_notify("buddy-status-change", icon_path, "Status Changed", growl_msg, NULL);
+			g_snprintf(growl_msg, len, "status message removed\n%s\n%s",buddy_nick, buddy_name );							
+			
+			gntp_notify("buddy-change-msg", icon_path, "Status Message Changed", growl_msg, NULL);
 			free(growl_msg);
 		}
 		else
@@ -206,7 +205,7 @@ buddy_status_changed_cb(PurpleBuddy *buddy, PurpleStatus *old_status, PurpleStat
 			g_snprintf(growl_msg, len, "\"%s\"\n%s\n%s",
 												status_msg, buddy_nick, buddy_name );
 												
-			gntp_notify("buddy-status-change", icon_path, "Status Changed", growl_msg, NULL);
+			gntp_notify("buddy-change-msg", icon_path, "Status Changed", growl_msg, NULL);
 			free(growl_msg);
 		}
 	}
@@ -221,7 +220,7 @@ buddy_status_changed_cb(PurpleBuddy *buddy, PurpleStatus *old_status, PurpleStat
 	g_snprintf(growl_msg, len, "%s\n%s\n%s",
 										status_name, buddy_nick, buddy_name );
 										
-	gntp_notify("buddy-status-change", icon_path, "Status Changed", growl_msg, NULL);
+	gntp_notify("buddy-change-status", icon_path, "Status Changed", growl_msg, NULL);
 	
 	free(growl_msg);
 }
