@@ -10,10 +10,15 @@
 #define PLUGIN_AUTHOR	"Daniel Dimovski <daniel.k.dimovski@gmail.com>"
 #define PLUGIN_DESC		"Plugin sends Pidgin signals to Growl."
 #define PLUGIN_ID		"core-pidgin-growl-dkd1"
-#define ICON_PATH 		"http://developer.pidgin.im/attachment/wiki/SpreadPidginAvatars/pidgin.2.png?format=raw"
-#define REV				"Pidgin-GNTP rev 22"
+#define ICON_PATH 		"pixmaps/pidgin/growl_icon.png"
+#define REV				"Pidgin-GNTP rev 23"
 #define SERVER_IP 		"127.0.0.1:23053"
 	
+#include <direct.h> // for getcwd
+#include <stdlib.h>// for MAX_PATH
+
+char DefaultIcon[_MAX_PATH];
+
 #if 0
 	#define DEBUG_MSG(x) MessageBox(0,x,"DEBUG",0);
 #else
@@ -67,10 +72,10 @@ char* notifications[] = {
 	"buddy-sign-out",
 	"buddy-change-status",
 	"buddy-change-msg",
-	"im-msg-recived",
+	"im-msg-received",
 	"connection-error",
 	"buddy-change-image",
-	"chat-msg-recived",
+	"chat-msg-received",
 	"chat-buddy-sign-in",
 	"chat-buddy-sign-out",
 	"chat-invited",
@@ -91,9 +96,15 @@ gint compare_status(struct buddy_status* a, struct buddy_status* b)
 		return 1;
 }
 	
-	
-/**************************************************************************
- * send growl message (from mattn's gntp-send commandline program)
- * http://github.com/mattn/gntp-send/tree/master
- **************************************************************************/
-#include "gntp-send.h"
+
+typedef int (__cdecl* GROWL_REGISTER)(const char *const server , const char *const appname ,
+const char **const notifications , const int notifications_count , const char *const password, const char* icon_path);
+
+typedef int (__cdecl* GROWL_NOTIFY)(const char *const server,const char *const appname,const char *const notify,const char *const title, const char *const message ,
+                                const char *const password, const char* const url, const char* const icon);
+
+GROWL_REGISTER growl_register;   // Function pointer
+GROWL_NOTIFY growl_notify;    	// Function pointer
+
+int connected;
+int registered; 

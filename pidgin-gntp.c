@@ -1,5 +1,41 @@
 #include "pidgin-gntp.h"
 
+
+
+void connect_to_dll()
+{
+	if(connected)
+		return;
+	
+	HMODULE hDLL;               // Handle to DLL
+	hDLL = LoadLibraryA("growl.dll");
+	if (hDLL != NULL)
+	{
+	   growl_register = (GROWL_REGISTER)GetProcAddress(hDLL, "growl_tcp_register");
+	   growl_notify = (GROWL_NOTIFY)GetProcAddress(hDLL, "growl_tcp_notify");
+
+	   if (!growl_register || !growl_notify)
+	   {
+	      FreeLibrary(hDLL);       
+	   }
+	   else
+	   {	
+		   connected = 1;
+	   }
+	}
+	else
+	{
+	}
+}
+
+gntp_notify(char* notify, char* icon, char* title, char* message, char* password)
+{
+	if(growl_notify)
+	{
+		growl_notify(SERVER_IP, PLUGIN_NAME, notify, title, message, password, NULL, icon);
+	}
+}
+
 static int
 is_allowed(PurpleAccount *account)
 {
@@ -181,7 +217,7 @@ buddy_status_changed_cb(PurpleBuddy *buddy, PurpleStatus *old_status, PurpleStat
 	
 	if( node != NULL )
 	{
-		DEBUG_MSG("status node recived\n");
+		DEBUG_MSG("status node received\n");
 		struct buddy_status* node_status = node->data;
 		
 		free(node_status->status);
@@ -385,7 +421,7 @@ received_im_msg_cb(PurpleAccount *account, char *sender, char *buffer,
 	icon = purple_buddy_get_icon( buddy );
 	iconpath = purple_buddy_icon_get_full_path( icon );
 	
-	gntp_notify("im-msg-recived", iconpath, "IM Message", notification, NULL);
+	gntp_notify("im-msg-received", iconpath, "IM Message", notification, NULL);
 	
 	free(message);
 	free(notification);
@@ -429,7 +465,7 @@ received_chat_msg_cb(PurpleAccount *account, char *sender, char *buffer,
 	notification = malloc( len );
 	g_snprintf(notification, len, "%s: %s", sender, message);
 	
-	gntp_notify("chat-msg-recived", NULL, "Chat Message", notification, NULL);
+	gntp_notify("chat-msg-received", NULL, "Chat Message", notification, NULL);
 	
 	free(message);
 	free(notification);
@@ -619,8 +655,26 @@ plugin_load(PurplePlugin *plugin)
 	void *ft_handle       = purple_xfers_get_handle();
 	void *notify_handle   = purple_notify_get_handle();
 
-	gntp_register(NULL);
+	//gntp_register(NULL);
 
+	connected = 0;
+	registered = 0;
+	
+	connect_to_dll();
+	
+	_getcwd(DefaultIcon, _MAX_PATH);
+	strcat(DefaultIcon, "/pixmaps/pidgin/growl_icon.png");
+	
+	if(!registered)
+	{
+		if(growl_register)
+		{
+			growl_register(SERVER_IP, PLUGIN_NAME, (const char **const)notifications, 12, 0, DefaultIcon);
+			registered = 1;
+		}
+	}
+	
+	
 	/* Account subsystem signals */
 	purple_signal_connect(acc_handle, "account-status-changed",
 						plugin, PURPLE_CALLBACK(account_status_changed_cb), NULL);
@@ -839,7 +893,7 @@ static PurplePluginInfo info =
 
 static void
 init_plugin(PurplePlugin *plugin)
-{
+{	
 	purple_prefs_add_none("/plugins/core/pidgin-gntp");
 	
 	purple_prefs_add_bool("/plugins/core/pidgin-gntp/on_focus", FALSE);	
