@@ -15,6 +15,11 @@ gntp_notify(char* notify, char* icon, char* title, char* message, char* password
 	growl_tcp_notify(SERVER_IP, password, &data);
 }
 
+static void
+growl_notify_cb(const growl_callback_data *data)
+{
+}
+
 static int
 is_allowed(PurpleAccount *account)
 {
@@ -643,6 +648,7 @@ plugin_load(PurplePlugin *plugin)
 	
 	if(!registered)
 	{
+		growl_init(growl_notify_cb);
 		growl_tcp_register(SERVER_IP, PLUGIN_NAME, (const char **const)notifications, 12, 0, DefaultIcon);
 		registered = 1;
 	}
