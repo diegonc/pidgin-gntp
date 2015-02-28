@@ -95,16 +95,5 @@ gint compare_status(struct buddy_status* a, struct buddy_status* b)
 	else 
 		return 1;
 }
-	
 
-typedef int (__cdecl* GROWL_REGISTER)(const char *const server , const char *const appname ,
-const char **const notifications , const int notifications_count , const char *const password, const char* icon_path);
-
-typedef int (__cdecl* GROWL_NOTIFY)(const char *const server,const char *const appname,const char *const notify,const char *const title, const char *const message ,
-                                const char *const password, const char* const url, const char* const icon);
-
-GROWL_REGISTER growl_register;   // Function pointer
-GROWL_NOTIFY growl_notify;    	// Function pointer
-
-int connected;
 int registered; 

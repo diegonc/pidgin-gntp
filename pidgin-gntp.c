@@ -1,39 +1,18 @@
 #include "pidgin-gntp.h"
+#include <snoregrowl/growl.h>
 
-
-
-void connect_to_dll()
-{
-	if(connected)
-		return;
-	
-	HMODULE hDLL;               // Handle to DLL
-	hDLL = LoadLibraryA("growl.dll");
-	if (hDLL != NULL)
-	{
-	   growl_register = (GROWL_REGISTER)GetProcAddress(hDLL, "growl_tcp_register");
-	   growl_notify = (GROWL_NOTIFY)GetProcAddress(hDLL, "growl_tcp_notify");
-
-	   if (!growl_register || !growl_notify)
-	   {
-	      FreeLibrary(hDLL);       
-	   }
-	   else
-	   {	
-		   connected = 1;
-	   }
-	}
-	else
-	{
-	}
-}
-
+void
 gntp_notify(char* notify, char* icon, char* title, char* message, char* password)
 {
-	if(growl_notify)
-	{
-		growl_notify(SERVER_IP, PLUGIN_NAME, notify, title, message, password, NULL, icon);
-	}
+	growl_notification_data data = {0};
+
+	data.app_name = PLUGIN_NAME;
+	data.notify = notify;
+	data.title = title;
+	data.message = message;
+	data.icon = icon;
+
+	growl_tcp_notify(SERVER_IP, password, &data);
 }
 
 static int
@@ -657,21 +636,15 @@ plugin_load(PurplePlugin *plugin)
 
 	//gntp_register(NULL);
 
-	connected = 0;
 	registered = 0;
-	
-	connect_to_dll();
 	
 	_getcwd(DefaultIcon, _MAX_PATH);
 	strcat(DefaultIcon, "/pixmaps/pidgin/growl_icon.png");
 	
 	if(!registered)
 	{
-		if(growl_register)
-		{
-			growl_register(SERVER_IP, PLUGIN_NAME, (const char **const)notifications, 12, 0, DefaultIcon);
-			registered = 1;
-		}
+		growl_tcp_register(SERVER_IP, PLUGIN_NAME, (const char **const)notifications, 12, 0, DefaultIcon);
+		registered = 1;
 	}
 	
 	
