@@ -8,7 +8,7 @@ SNOREGROWL_TOP ?= $(WIN32_DEV_TOP)/SnoreGrowl
 ##
 ## INCLUDE PATHS
 ##
-INCLUDE_PATHS +=	-I. \
+INCLUDE_PATHS += \
 			-I$(SNOREGROWL_TOP)/include \
 			-I$(GTK_TOP)/include \
 			-I$(GTK_TOP)/include/gtk-2.0 \
@@ -26,7 +26,8 @@ INCLUDE_PATHS +=	-I. \
 
 LIB_PATHS +=	-L$(GTK_TOP)/lib \
 				-L$(SNOREGROWL_TOP)/lib \
-				-L$(PURPLE_TOP)
+				-L$(PURPLE_TOP) \
+				-L$(PIDGIN_TOP)
 
 INCLUDE_PATHS += 	-I$(PIDGIN_TREE_TOP)/libpurple
 INCLUDE_PATHS += 	-I$(PIDGIN_TREE_TOP)/../win32-dev/gtk_2_0/include
@@ -49,7 +50,8 @@ LIBS =		-l gtk-win32-2.0 \
 			-l intl \
 			-l purple \
 			-l ws2_32 \
-			-lsnoregrowl.dll
+			-lpidgin \
+			-lsnoregrowl
 
 include $(PIDGIN_COMMON_RULES)
 

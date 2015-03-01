@@ -34,6 +34,7 @@ char DefaultIcon[_MAX_PATH];
 // pidgin includes
 #include "internal.h"
 #include "connection.h"
+#include "account.h"
 #include "conversation.h"
 #include "core.h"
 #include "debug.h"
@@ -46,6 +47,9 @@ char DefaultIcon[_MAX_PATH];
 #include "plugin.h"
 #include "pluginpref.h"
 #include "prefs.h"
+#include "network.h"
+#include <libpurple/util.h>
+#include <pidgin/gtkutils.h>
 
 char* custom_get_buddy_status_text(PurpleBuddy *buddy);
 

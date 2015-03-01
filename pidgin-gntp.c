@@ -1,6 +1,35 @@
 #include "pidgin-gntp.h"
 #include <snoregrowl/growl.h>
 
+static HANDLE semaphore = NULL;
+static unsigned short port = 0;
+static int notify_server_fd = -1;
+static guint notify_server_watch = 0;
+static GString* notif_ctx_buffer = NULL;
+
+static void
+notif_ctx_buffer_append(const gchar* ptr, gssize len)
+{
+	if (notif_ctx_buffer == NULL) {
+		notif_ctx_buffer = g_string_new_len(ptr, len);
+	} else {
+		g_string_append_len(notif_ctx_buffer, ptr, len);
+	}
+}
+
+static void
+notif_ctx_buffer_discard(void)
+{
+	g_string_free(notif_ctx_buffer, TRUE);
+	notif_ctx_buffer = NULL;
+}
+
+static gchar*
+notif_ctx_buffer_str(void)
+{
+	return notif_ctx_buffer->str;
+}
+
 void
 gntp_notify(char* notify, char* icon, char* title, char* message, char* password)
 {
@@ -16,8 +45,183 @@ gntp_notify(char* notify, char* icon, char* title, char* message, char* password
 }
 
 static void
-growl_notify_cb(const growl_callback_data *data)
+gntp_notify_with_callback(char* notify, char* icon, char* title,
+                          char* message, char* password, char* context)
 {
+	growl_notification_data data = {0};
+
+	data.app_name = PLUGIN_NAME;
+	data.notify = notify;
+	data.title = title;
+	data.message = message;
+	data.icon = icon;
+	data.callback_context = context;
+
+	growl_tcp_notify(SERVER_IP, password, &data);
+}
+
+static gchar*
+make_context_string(PurpleAccount* account, PurpleConversation* conv)
+{
+	PurpleConversationType type = purple_conversation_get_type(conv);
+	const char* conv_name = purple_conversation_get_name(conv);
+	const char* acc_name = purple_account_get_username(account);
+	const char* proto = purple_account_get_protocol_id(account);
+	size_t conv_name_size = strlen(conv_name) + 1;
+	size_t acc_name_size = strlen(acc_name) + 1;
+	size_t proto_size = strlen(proto) + 1;
+	size_t ctx_size = sizeof type;
+	guchar* ctx;
+	gchar* encoded;
+
+	ctx_size += conv_name_size;
+	ctx_size += acc_name_size;
+	ctx_size += proto_size;
+
+	ctx = malloc(sizeof *ctx * ctx_size);
+	if (ctx) {
+		guchar* ptr = ctx;
+		memcpy(ptr, &type, sizeof type);
+		ptr += sizeof type;
+		memcpy(ptr, conv_name, conv_name_size);
+		ptr += conv_name_size;
+		memcpy(ptr, acc_name, acc_name_size);
+		ptr += acc_name_size;
+		memcpy(ptr, proto, proto_size);
+
+		encoded = purple_base64_encode(ctx, ctx_size);
+		free(ctx);
+		return encoded;
+	}
+
+	return 0;
+}
+
+static void
+parse_context_string(const gchar* ctx, PurpleAccount** account, PurpleConversation** conv)
+{
+	PurpleConversationType type;
+	const char* conv_name;
+	const char* acc_name;
+	const char* proto;
+
+	guchar* decoded = purple_base64_decode(ctx, NULL);
+	const char* ptr = (const char*) decoded;
+
+	memcpy(&type, ptr, sizeof type);
+	ptr += sizeof type;
+	conv_name = ptr;
+	ptr += strlen(conv_name) + 1;
+	acc_name = ptr;
+	ptr += strlen(acc_name) + 1;
+	proto = ptr;
+
+	*account = purple_accounts_find(acc_name, proto);
+	if (*account != NULL)
+		*conv = purple_find_conversation_with_account(type, conv_name, *account);
+
+	g_free(decoded);
+}
+
+static void
+notify_context_to_main_thread(const char* context)
+{
+	struct sockaddr_in localhost;
+	int fd = socket(AF_INET, SOCK_DGRAM, 0);
+	if (fd == -1) return;
+
+	memset(&localhost, 0, sizeof(struct sockaddr_in));
+	localhost.sin_family = AF_INET;
+	localhost.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+	localhost.sin_port = htons(port);
+
+	sendto(fd, context, strlen(context) + 1, 0,
+		(const struct sockaddr *) &localhost, sizeof localhost);
+	close(fd);
+}
+
+static void
+growl_notify_cb(const growl_callback_data* data)
+{
+	if (g_str_has_prefix(data->reason, "CLICK")) {
+		DWORD result = WaitForSingleObject(semaphore, INFINITE);
+		if (result == WAIT_OBJECT_0)
+			notify_context_to_main_thread(data->data);
+	}
+}
+
+static void
+present_conversation_with_event(const char* context)
+{
+	PurpleAccount* account = NULL;
+	PurpleConversation* conv = NULL;
+
+	parse_context_string(context, &account, &conv);
+
+	if (conv != NULL) {
+		PidginWindow* win = PIDGIN_CONVERSATION(conv)->win;
+		purple_conversation_present(conv);
+		pidgin_conv_window_raise(win);
+	}
+}
+
+static void
+notification_arrived_at_main_thread(gpointer data, gint source, PurpleInputCondition cond)
+{
+	const size_t BUFFER_SIZE = 1024;
+	ssize_t count;
+	char buffer[BUFFER_SIZE];
+	char* p = buffer;
+
+	do {
+		count = read(source, p, BUFFER_SIZE - (p - buffer));
+		if (count == -1) {
+			if (errno == EAGAIN) {
+				size_t existing = p - buffer;
+				if (existing > 0)
+					notif_ctx_buffer_append(buffer, existing);
+			} else {
+				notif_ctx_buffer_discard();
+				purple_debug_error(
+					"pidgin-gntp",
+					"Error while reading notification callback context: %s\n",
+					strerror(errno));
+				ReleaseSemaphore(semaphore, 1, NULL);
+			}
+			return;
+		} else if (count == 0) {
+			notif_ctx_buffer_discard();
+			purple_debug_error(
+				"pidgin-gntp",
+				"read returned 0 while reading notification callback context\n");
+			ReleaseSemaphore(semaphore, 1, NULL);
+			return;
+		} else if (p[count - 1] == 0) {
+			gchar* context;
+			size_t existing = (p - buffer) + count;
+			notif_ctx_buffer_append(buffer, existing);
+			context = notif_ctx_buffer_str();
+			present_conversation_with_event(context);
+			notif_ctx_buffer_discard();
+			ReleaseSemaphore(semaphore, 1, NULL);
+			return;
+		} else {
+			size_t remaining = BUFFER_SIZE - (p + count - buffer);
+			if (BUFFER_SIZE < (p + count - buffer)) {
+				notif_ctx_buffer_discard();
+				purple_debug_error(
+					"pidgin-gntp",
+					"crossed the end of buffer while reading notification callback context\n");
+				ReleaseSemaphore(semaphore, 1, NULL);
+				return;
+			} else if (remaining == 0) {
+				notif_ctx_buffer_append(buffer, BUFFER_SIZE);
+				p = buffer;
+			} else {
+				p += count;
+			}
+		}
+	} while (1);
 }
 
 static int
@@ -427,7 +631,7 @@ received_chat_msg_cb(PurpleAccount *account, char *sender, char *buffer,
 					 PurpleConversation *chat, PurpleMessageFlags flags, void *data)
 {
 	gboolean on_focus;
-	char *message, *notification;
+	char *message, *notification, *cb_context;
 	int len;
 	
 	DEBUG_MSG("received_chat_msg_cb\n");
@@ -449,7 +653,9 @@ received_chat_msg_cb(PurpleAccount *account, char *sender, char *buffer,
 	notification = malloc( len );
 	g_snprintf(notification, len, "%s: %s", sender, message);
 	
-	gntp_notify("chat-msg-received", NULL, "Chat Message", notification, NULL);
+	cb_context = make_context_string(account, chat);
+	gntp_notify_with_callback("chat-msg-received", NULL, "Chat Message", notification, NULL, cb_context);
+	g_free(cb_context);
 	
 	free(message);
 	free(notification);
@@ -625,6 +831,46 @@ static void
 notify_emails_cb(char **subjects, char **froms, char **tos, char **urls, guint count) {
 }
 
+static gboolean
+notify_server_start(void)
+{
+	int err;
+	struct sockaddr_in serveraddr;
+	port = purple_prefs_get_int("/plugins/core/pidgin-gntp/notify_port");
+
+	semaphore = CreateSemaphore(NULL, 0, 1, NULL);
+	if (semaphore == NULL)
+		return FALSE;
+
+	notify_server_fd = socket(AF_INET, SOCK_DGRAM, 0);
+	if (notify_server_fd == -1) {
+		CloseHandle(semaphore);
+		return FALSE;
+	}
+
+	memset(&serveraddr, 0, sizeof serveraddr);
+	serveraddr.sin_family = AF_INET;
+	serveraddr.sin_port = htons(port);
+	serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+	err = bind(notify_server_fd, (struct sockaddr*) &serveraddr,
+				sizeof serveraddr);
+	if (err == -1) {
+		CloseHandle(semaphore);
+		close(notify_server_fd);
+		notify_server_fd = -1;
+		return FALSE;
+	}
+
+	notify_server_watch = purple_input_add(notify_server_fd,
+							PURPLE_INPUT_READ,
+							notification_arrived_at_main_thread,
+							NULL);
+
+	ReleaseSemaphore(semaphore, 1, NULL);
+	return TRUE;
+}
+
 /**************************************************************************
  * Plugin stuff
  **************************************************************************/
@@ -648,6 +894,9 @@ plugin_load(PurplePlugin *plugin)
 	
 	if(!registered)
 	{
+		if (!notify_server_start())
+			return FALSE;
+
 		growl_init(growl_notify_cb);
 		growl_tcp_register(SERVER_IP, PLUGIN_NAME, (const char **const)notifications, 12, 0, DefaultIcon);
 		registered = 1;
@@ -883,6 +1132,7 @@ init_plugin(PurplePlugin *plugin)
 	purple_prefs_add_bool("/plugins/core/pidgin-gntp/on_away", TRUE);
 	
 	purple_prefs_add_int("/plugins/core/pidgin-gntp/hack_ms", 10000);
+	purple_prefs_add_int("/plugins/core/pidgin-gntp/notify_port", 27492);
 	
 	acc_status = purple_savedstatus_get_type( purple_savedstatus_get_startup() );		
 }
