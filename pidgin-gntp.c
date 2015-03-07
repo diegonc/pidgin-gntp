@@ -162,6 +162,8 @@ present_conversation_with_event(const char* context)
 		PidginWindow* win = PIDGIN_CONVERSATION(conv)->win;
 		purple_conversation_present(conv);
 		pidgin_conv_window_raise(win);
+		gtk_window_set_keep_above(GTK_WINDOW(win->window), TRUE);
+		gtk_window_set_keep_above(GTK_WINDOW(win->window), FALSE);
 	}
 }
 
